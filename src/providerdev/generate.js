@@ -17,7 +17,7 @@ async function loadManifest(configPath) {
     createReadStream(configPath)
       .pipe(csv())
       .on('data', (row) => {
-        const key = `${row.filename}::${row.operationId}`;
+        const key = `${row.filename}::${row.path}::${row.verb}`;
         manifest[key] = row;
       })
       .on('end', () => {
@@ -251,9 +251,17 @@ export async function generate(options) {
       
       // Initialize resources object with defaultdict-like behavior
       const resources = {};
+
+      // Define valid HTTP verbs to process
+      const validVerbs = ['get', 'post', 'put', 'patch', 'delete'];      
       
       for (const [pathKey, pathItem] of Object.entries(spec.paths || {})) {
         for (const [verb, operation] of Object.entries(pathItem)) {
+          // Only process valid HTTP verbs
+          if (!validVerbs.includes(verb)) {
+            continue;
+          }
+
           if (typeof operation !== 'object' || operation === null) {
             continue;
           }
@@ -263,7 +271,7 @@ export async function generate(options) {
             continue;
           }
           
-          const manifestKey = `${filename}::${operationId}`;
+          const manifestKey = `${filename}::${pathKey}::${verb}`;
           const entry = manifest[manifestKey];
           if (!entry) {
             logger.error(`❌ ERROR: ${filename} → ${operationId} not found in manifest`);
