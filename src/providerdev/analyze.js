@@ -63,6 +63,11 @@ function detectObjectKey(spec, operation) {
     return '';
   }
   
+  // Check for explicit x-stackql-objectKey first
+  if (operation['x-stackql-objectKey']) {
+    return operation['x-stackql-objectKey'];
+  }
+  
   let responseObject = null;
   let responseCode = null;
   
@@ -341,9 +346,26 @@ export async function analyze(options) {
           // Find existing mapping if available
           let { resourceName, methodName, sqlVerb, objectKey } = findExistingMapping(spec, pathRef);
           
+          // Check for explicit x-stackql-resource in operation
+          if (operation['x-stackql-resource']) {
+            resourceName = operation['x-stackql-resource'];
+          }
+          
+          // Check for explicit x-stackql-method in operation
+          if (operation['x-stackql-method']) {
+            methodName = operation['x-stackql-method'];
+          }
+          
           // CHANGE 1: Default methodName to formattedOpId if not found
           if (!methodName) {
             methodName = formattedOpId;
+          }
+          
+          // Check for explicit x-stackql-verb or x-stackql-sqlVerb in operation
+          if (operation['x-stackql-verb']) {
+            sqlVerb = operation['x-stackql-verb'];
+          } else if (operation['x-stackql-sqlVerb']) {
+            sqlVerb = operation['x-stackql-sqlVerb'];
           }
           
           // CHANGE 2: Default sqlVerb based on HTTP verb if not found
