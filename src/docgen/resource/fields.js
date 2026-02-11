@@ -1,7 +1,9 @@
 // src/docgen/resource/fields.js
-import { 
-    getSqlMethodsWithOrderedFields, 
+import {
+    getSqlMethodsWithOrderedFields,
     sanitizeHtml,
+    generateSchemaJsonFromProps,
+    sortSchemaFields,
 } from '../helpers.js';
 import { docView } from './view.js';
 
@@ -88,6 +90,65 @@ export function createFieldsSection(resourceType, resourceData, dereferencedAPI)
             content += `</Tabs>\n`;
         } else {
             // no fields
+            content += `${mdCodeAnchor}SELECT${mdCodeAnchor} not supported for this resource, use ${mdCodeAnchor}SHOW METHODS${mdCodeAnchor} to view available operations for the resource.\n\n`;
+        }
+
+    } else {
+        // its a view
+        console.log(`processing view : ${resourceData.name}...`)
+        content += docView(resourceData);
+    }
+
+    return content;
+}
+
+export function createFieldsSectionv2(resourceType, resourceData, dereferencedAPI) {
+    let content = '## Fields\n\n';
+
+    if (resourceType === 'Resource') {
+
+        content += 'The following fields are returned by `SELECT` queries:\n\n';
+
+        // Use the reusable function to get methods with ordered fields
+        const methods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select');
+
+        if (Object.keys(methods).length > 0) {
+            const methodNames = Object.keys(methods);
+
+            const tabValues = methodNames.map(methodName => {
+                return `{ label: '${methodName}', value: '${methodName}' }`;
+            }).join(',\n        ');
+
+            content += `<Tabs
+    defaultValue="${methodNames[0]}"
+    values={[
+        ${tabValues}
+    ]}
+>\n`;
+
+            for (const methodName of methodNames) {
+                const methodData = methods[methodName];
+
+                content += `<TabItem value="${methodName}">\n\n`;
+
+                // Add the method description if available and not in the meaningless list
+                if (methodData.respDescription &&
+                    !meaninglessDescriptions.includes(methodData.respDescription.trim().toLowerCase()) &&
+                    methodData.respDescription.trim().length > 0) {
+                    content += `${sanitizeHtml(methodData.respDescription)}\n\n`;
+                }
+
+                // Build nested schema JSON from raw response props and sort fields
+                const schemaFields = generateSchemaJsonFromProps(methodData.rawRespProps);
+                const sortedFields = sortSchemaFields(schemaFields);
+
+                content += `<SchemaTable fields={${JSON.stringify(sortedFields, null, 2)}} />\n`;
+
+                content += `</TabItem>\n`;
+            }
+
+            content += `</Tabs>\n`;
+        } else {
             content += `${mdCodeAnchor}SELECT${mdCodeAnchor} not supported for this resource, use ${mdCodeAnchor}SHOW METHODS${mdCodeAnchor} to view available operations for the resource.\n\n`;
         }
 

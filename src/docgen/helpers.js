@@ -90,7 +90,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
         // Get all SQL verb methods
         const allSqlMethodNames = new Set();
         const sqlVerbTypes = ['select', 'insert', 'update', 'delete', 'replace'];
-        
+
         for (const verb of sqlVerbTypes) {
             if (resourceData.sqlVerbs[verb] && resourceData.sqlVerbs[verb].length > 0) {
                 for (const method of resourceData.sqlVerbs[verb]) {
@@ -99,32 +99,32 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
                 }
             }
         }
-        
+
         // Process each method that's not in any SQL verb
         for (const [methodName, methodData] of Object.entries(resourceData.methods)) {
             if (!allSqlMethodNames.has(methodName)) {
                 const { path, httpVerb, mediaType, openAPIDocKey } = methodData.operation;
                 let resolvedPath = path;
                 let resolvedVerb = httpVerb;
-                
+
                 // If operation uses $ref, resolve it
                 if (methodData.operation.$ref) {
                     const refPath = methodData.operation.$ref;
-                    
+
                     // Extract the path and verb from the $ref
                     // The path format is typically '#/paths/~1api~1v2~1accounts~1{name}:undrop/post'
                     const pathMatch = refPath.match(/#\/paths\/(.+)\/([^/]+)$/);
-                    
+
                     if (pathMatch && pathMatch.length === 3) {
                         // Replace the escaped characters in the path
                         let path = pathMatch[1]
                             .replace(/~1/g, '/') // Replace ~1 with /
                             .replace(/~0/g, '~') // Replace ~0 with ~ if needed
-                        
+
                         // Don't modify path parts with special characters like ':undrop'
                         resolvedPath = path;
                         resolvedVerb = pathMatch[2];
-                        
+
                         console.log(`Resolved path: ${resolvedPath}, verb: ${resolvedVerb}`);
                     } else {
                         console.warn(`Could not parse $ref path: ${refPath}`);
@@ -135,20 +135,20 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
 
                 // Get response and params using the same function as for SQL verbs
                 const { respProps, respDescription, opDescription, requestBody } = getHttpOperationInfo(
-                    dereferencedAPI, 
-                    resolvedPath, 
-                    resolvedVerb, 
-                    methodData.response.mediaType || '', 
+                    dereferencedAPI,
+                    resolvedPath,
+                    resolvedVerb,
+                    methodData.response.mediaType || '',
                     methodData.response.openAPIDocKey || '200',
                     ''
                 );
-                
+
                 const { requiredParams, optionalParams } = getHttpOperationParams(
-                    dereferencedAPI, 
-                    resolvedPath, 
+                    dereferencedAPI,
+                    resolvedPath,
                     resolvedVerb
                 );
-                
+
                 // Initialize the method with the same structure as SQL methods
                 methods[methodName] = {
                     opDescription,
@@ -157,16 +157,17 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
                     requiredParams: requiredParams || {},
                     optionalParams: optionalParams || {},
                     requestBody: requestBody || {},
+                    rawRespProps: respProps,
                 };
-                
+
                 // Format and sort the properties using our helper functions
                 const allProperties = formatProperties(respProps);
                 sortAndAddProperties(methods[methodName], allProperties);
-                
+
                 console.info(`Processed exec method: ${methodName}`);
             }
         }
-        
+
         return methods;
     }
 
@@ -180,22 +181,23 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
         const {requiredParams, optionalParams} = getHttpOperationParams(dereferencedAPI, path, httpVerb);
 
         // Initialize the method object with description and params
-        methods[methodName] = { 
+        methods[methodName] = {
             opDescription,
             respDescription,
             properties: {},
             requiredParams: requiredParams || {},
             optionalParams: optionalParams || {},
             requestBody: requestBody || {},
+            rawRespProps: respProps,
         };
-        
+
         // Format and sort the properties using our helper functions
         const allProperties = formatProperties(respProps);
         sortAndAddProperties(methods[methodName], allProperties);
-        
+
         console.info(`Processed method: ${methodName}`);
     }
-    
+
     return methods;
 }
 
@@ -567,6 +569,81 @@ function getHttpRespBody(schema, objectKey) {
             respDescription: '',
         };
     }
+}
+
+/**
+ * Recursively generates a nested JSON schema tree from response properties,
+ * suitable for use with the SchemaTable React component.
+ * Each node has: { name, type, description, children? }
+ * @param {Object} respProps - The raw response properties from the dereferenced API
+ * @param {number} depth - Current recursion depth
+ * @param {number} maxDepth - Maximum recursion depth to prevent infinite loops
+ * @returns {Array} Array of schema field objects
+ */
+export function generateSchemaJsonFromProps(respProps, depth = 0, maxDepth = 4) {
+    if (depth >= maxDepth || !respProps || typeof respProps !== 'object') return [];
+
+    return Object.entries(respProps).map(([propName, prop]) => {
+        if (!prop) return null;
+
+        let propType = prop.type || 'object';
+        let propDesc = sanitizeHtml(prop.description || '');
+
+        // Add format info to type string if available
+        if (prop.format) {
+            propType += ` (${prop.format})`;
+        }
+
+        let children = [];
+
+        // Handle arrays - get children from items
+        if (prop.type === 'array' && prop.items) {
+            if (prop.items.properties) {
+                children = generateSchemaJsonFromProps(prop.items.properties, depth + 1, maxDepth);
+            }
+        }
+
+        // Handle objects - get children from properties
+        if (prop.type === 'object' && prop.properties) {
+            children = generateSchemaJsonFromProps(prop.properties, depth + 1, maxDepth);
+        }
+
+        return {
+            name: propName,
+            type: propType,
+            description: propDesc,
+            ...(children.length > 0 && { children })
+        };
+    }).filter(Boolean);
+}
+
+/**
+ * Sorts an array of schema field objects using the standard field priority:
+ * 1. Exact 'id' and 'name' fields
+ * 2. Fields ending with '_id'
+ * 3. Fields ending with '_name'
+ * 4. All other fields (alphabetical)
+ * @param {Array} fields - Array of schema field objects with 'name' property
+ * @returns {Array} Sorted array of schema field objects
+ */
+export function sortSchemaFields(fields) {
+    if (!fields || fields.length === 0) return [];
+
+    const exactIdName = fields.filter(f => f.name === 'id' || f.name === 'name');
+    const idSuffix = fields.filter(f => f.name !== 'id' && f.name.endsWith('_id'));
+    const nameSuffix = fields.filter(f => f.name !== 'name' && f.name.endsWith('_name'));
+    const others = fields.filter(f =>
+        !exactIdName.includes(f) &&
+        !idSuffix.includes(f) &&
+        !nameSuffix.includes(f)
+    );
+
+    return [
+        ...exactIdName.sort((a, b) => a.name.localeCompare(b.name)),
+        ...idSuffix.sort((a, b) => a.name.localeCompare(b.name)),
+        ...nameSuffix.sort((a, b) => a.name.localeCompare(b.name)),
+        ...others.sort((a, b) => a.name.localeCompare(b.name)),
+    ];
 }
 
 function getHttpOperationParams(dereferencedAPI, path, httpVerb) {
