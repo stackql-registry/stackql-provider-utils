@@ -291,6 +291,7 @@ export async function generateDocsv2(options) {
         outputDir,          // e.g., 'website'
         providerDataDir,    // e.g., 'config/provider-data'
         dereferenced = false,
+        succinct = false,   // use summary instead of description for method/example descriptions
     } = options;
 
     console.log(`documenting ${providerName} (v2)...`);
@@ -338,7 +339,7 @@ export async function generateDocsv2(options) {
         const filePath = path.join(serviceDir, file);
         totalServicesCount++;
         const serviceFolder = `${servicesDir}/${serviceName}`;
-        await createDocsForServicev2(filePath, providerName, serviceName, serviceFolder, dereferenced);
+        await createDocsForServicev2(filePath, providerName, serviceName, serviceFolder, dereferenced, succinct);
     }
 
     console.log(`Processed ${totalServicesCount} services`);
@@ -394,7 +395,7 @@ ${servicesToMarkdown(providerName, secondColumnServices)}
 }
 
 // v2 service processing - uses SchemaTable for collapsible nested fields
-async function createDocsForServicev2(yamlFilePath, providerName, serviceName, serviceFolder, dereferenced = false) {
+async function createDocsForServicev2(yamlFilePath, providerName, serviceName, serviceFolder, dereferenced = false, succinct = false) {
 
     const data = yaml.load(fs.readFileSync(yamlFilePath, 'utf8'));
 
@@ -467,18 +468,18 @@ async function createDocsForServicev2(yamlFilePath, providerName, serviceName, s
 
     // Process each resource in first column
     for (const resource of firstColumn) {
-        await processResourcev2(providerName, serviceFolder, serviceName, resource);
+        await processResourcev2(providerName, serviceFolder, serviceName, resource, succinct);
     }
 
     // Process each resource in second column
     for (const resource of secondColumn) {
-        await processResourcev2(providerName, serviceFolder, serviceName, resource);
+        await processResourcev2(providerName, serviceFolder, serviceName, resource, succinct);
     }
 
     console.log(`Generated documentation (v2) for ${serviceName}`);
 }
 
-async function processResourcev2(providerName, serviceFolder, serviceName, resource) {
+async function processResourcev2(providerName, serviceFolder, serviceName, resource, succinct = false) {
     console.log(`Processing resource (v2): ${resource.name}`);
 
     const resourceFolder = path.join(serviceFolder, resource.name);
@@ -491,6 +492,7 @@ async function processResourcev2(providerName, serviceFolder, serviceName, resou
         providerName,
         serviceName,
         resource,
+        succinct,
     );
     fs.writeFileSync(resourceIndexPath, resourceIndexContent);
 

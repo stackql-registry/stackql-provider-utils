@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CopyableCode from '@site/src/components/CopyableCode/CopyableCode';
 import styles from './SchemaTable.module.css';
 
 function SchemaRow({ name, type, description, children, depth = 0 }) {
@@ -10,14 +11,14 @@ function SchemaRow({ name, type, description, children, depth = 0 }) {
       <tr className={styles.row}>
         <td style={{ paddingLeft: `${depth * 24 + 12}px` }}>
           {hasChildren && (
-            <span 
-              className={styles.expander} 
+            <span
+              className={styles.expander}
               onClick={() => setExpanded(!expanded)}
             >
               {expanded ? '▼' : '▶'}
             </span>
           )}
-          <code>{name}</code>
+          <CopyableCode code={name} />
         </td>
         <td><code>{type}</code></td>
         <td>{description}</td>

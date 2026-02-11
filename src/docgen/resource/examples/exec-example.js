@@ -4,7 +4,7 @@ import {
     sanitizeHtml
 } from '../../helpers.js';
 
-export function createExecExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI) {
+export function createExecExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
     const execMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'exec');
     
     // if there are no exec methods, return empty content
@@ -30,7 +30,7 @@ export function createExecExamples(providerName, serviceName, resourceName, reso
         content += '<TabItem value="' + methodName + '">\n\n';
         
         // Add method description
-        const opDescription = methodDetails.opDescription || methodDetails.respDescription || 'No description available.';
+        const opDescription = (succinct && methodDetails.opSummary) ? methodDetails.opSummary : (methodDetails.opDescription || methodDetails.respDescription || 'No description available.');
         content += sanitizeHtml(opDescription);
         
         // Create SQL example

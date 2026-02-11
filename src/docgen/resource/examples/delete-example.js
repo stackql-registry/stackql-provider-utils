@@ -4,7 +4,7 @@ import {
     sanitizeHtml,
 } from '../../helpers.js';
 
-export function createDeleteExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI) {
+export function createDeleteExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
     const deleteMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'delete');
 
     // if there are no delete methods, return empty content
@@ -30,7 +30,7 @@ export function createDeleteExamples(providerName, serviceName, resourceName, re
         content += '<TabItem value="' + methodName + '">\n\n';
         
         // Add method description
-        const opDescription = methodDetails.opDescription || 'No description available.';
+        const opDescription = (succinct && methodDetails.opSummary) ? methodDetails.opSummary : (methodDetails.opDescription || 'No description available.');
         content += sanitizeHtml(opDescription);
 
         // Create SQL example

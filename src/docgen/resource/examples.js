@@ -6,26 +6,26 @@ import { createUpdateExamples } from './examples/update-example.js';
 import { createDeleteExamples } from './examples/delete-example.js';
 import { createExecExamples } from './examples/exec-example.js';
 
-export function createExamplesSection(providerName, serviceName, resourceName, resourceData, dereferencedAPI) {
+export function createExamplesSection(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
     let content = '';
-    
+
     // Add SELECT examples
-    content += createSelectExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI);
+    content += createSelectExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct);
 
     // Add INSERT examples
-    content += createInsertExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI);
-    
+    content += createInsertExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct);
+
     // Add UPDATE examples
-    content += createUpdateExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, false);
-    
+    content += createUpdateExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, false, succinct);
+
     // Add REPLACE examples
-    content += createUpdateExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, true);
+    content += createUpdateExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, true, succinct);
 
     // Add DELETE examples
-    content += createDeleteExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI);
+    content += createDeleteExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct);
 
     // Add EXEC examples
-    content += createExecExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI);    
+    content += createExecExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct);
 
     return content;
 }

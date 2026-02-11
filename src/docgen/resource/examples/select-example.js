@@ -4,7 +4,7 @@ import {
     sanitizeHtml
 } from '../../helpers.js';
 
-export function createSelectExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI) {
+export function createSelectExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
     const selectMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select');
     
     // if there are no select methods, return empty content
@@ -30,7 +30,7 @@ export function createSelectExamples(providerName, serviceName, resourceName, re
         content += '<TabItem value="' + methodName + '">\n\n';
         // content += methodDetails.opDescription || 'No description available.';
         // Add method description
-        const opDescription = methodDetails.opDescription || methodDetails.respDescription || 'No description available.';
+        const opDescription = (succinct && methodDetails.opSummary) ? methodDetails.opSummary : (methodDetails.opDescription || methodDetails.respDescription || 'No description available.');
         content += sanitizeHtml(opDescription);
 
         // Create SQL example
