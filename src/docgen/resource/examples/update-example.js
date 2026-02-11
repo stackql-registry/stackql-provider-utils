@@ -4,7 +4,7 @@ import {
     sanitizeHtml
 } from '../../helpers.js';
 
-export function createUpdateExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, isReplace = false) {
+export function createUpdateExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, isReplace = false, succinct = false) {
     const updateMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, isReplace ? 'replace' : 'update');
     
     // if there are no update methods, return empty content
@@ -34,10 +34,8 @@ export function createUpdateExamples(providerName, serviceName, resourceName, re
     Object.entries(updateMethods).forEach(([methodName, methodDetails]) => {
         content += '<TabItem value="' + methodName + '">\n\n';
         
-        // // Add method description
-        // content += methodDetails.opDescription || methodDetails.respDescription || 'No description available.';
         // Add method description
-        const opDescription = methodDetails.opDescription || 'No description available.';
+        const opDescription = (succinct && methodDetails.opSummary) ? methodDetails.opSummary : (methodDetails.opDescription || 'No description available.');
         content += sanitizeHtml(opDescription);
         
         // Create SQL example

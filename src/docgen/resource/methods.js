@@ -22,7 +22,7 @@ const getRequiredBodyParams = (methodDetails, accessType) => {
     }
 };
 
-export function createMethodsSection(resourceData, dereferencedAPI) {
+export function createMethodsSection(resourceData, dereferencedAPI, succinct = false) {
     
     let content = `\n## Methods\n\n`;
 
@@ -80,7 +80,7 @@ export function createMethodsSection(resourceData, dereferencedAPI) {
     <td><CopyableCode code="${accessType}" /></td>
     <td>${requiredParamsStr}</td>
     <td>${optionalParamsStr}</td>
-    <td>${sanitizeHtml(methodDetails.opDescription)}</td>
+    <td>${sanitizeHtml(succinct && methodDetails.opSummary ? methodDetails.opSummary : methodDetails.opDescription)}</td>
 </tr>`;
         }
     };

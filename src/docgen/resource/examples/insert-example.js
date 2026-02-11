@@ -4,7 +4,7 @@ import {
     sanitizeHtml
 } from '../../helpers.js';
 
-export function createInsertExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI) {
+export function createInsertExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
     const insertMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'insert');
 
     // if there are no insert methods, return empty content
@@ -34,9 +34,8 @@ export function createInsertExamples(providerName, serviceName, resourceName, re
         content += '<TabItem value="' + methodName + '">\n\n';
 
         // Add method description
-        const opDescription = methodDetails.opDescription || 'No description available.';
+        const opDescription = (succinct && methodDetails.opSummary) ? methodDetails.opSummary : (methodDetails.opDescription || 'No description available.');
         content += sanitizeHtml(opDescription);
-        // content += methodDetails.opDescription || 'No description available.';
         
         // Create SQL example
         content += '\n\n```sql\nINSERT INTO ' + providerName + '.' + serviceName + '.' + resourceName + ' (\n';

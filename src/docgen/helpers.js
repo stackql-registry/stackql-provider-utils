@@ -134,7 +134,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
                 }
 
                 // Get response and params using the same function as for SQL verbs
-                const { respProps, respDescription, opDescription, requestBody } = getHttpOperationInfo(
+                const { respProps, respDescription, opDescription, opSummary, requestBody } = getHttpOperationInfo(
                     dereferencedAPI,
                     resolvedPath,
                     resolvedVerb,
@@ -152,6 +152,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
                 // Initialize the method with the same structure as SQL methods
                 methods[methodName] = {
                     opDescription,
+                    opSummary,
                     respDescription,
                     properties: {},
                     requiredParams: requiredParams || {},
@@ -177,12 +178,13 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
 
     for (const thisMethod of resourceData.sqlVerbs[sqlVerb]) {
         const {path, httpVerb, mediaType, openAPIDocKey, objectKey, methodName} = getHttpOperationForSqlVerb(thisMethod.$ref, resourceData);
-        const {respProps, respDescription, opDescription, requestBody} = getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey);
+        const {respProps, respDescription, opDescription, opSummary, requestBody} = getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey);
         const {requiredParams, optionalParams} = getHttpOperationParams(dereferencedAPI, path, httpVerb);
 
         // Initialize the method object with description and params
         methods[methodName] = {
             opDescription,
+            opSummary,
             respDescription,
             properties: {},
             requiredParams: requiredParams || {},
@@ -383,8 +385,9 @@ function getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAP
         throw new Error(`HTTP verb '${httpVerb}' not found for path '${path}'`);
     }
     
-    // Get operation description
+    // Get operation description and summary
     const opDescription = (dereferencedAPI.paths[path][httpVerb].description || '');
+    const opSummary = (dereferencedAPI.paths[path][httpVerb].summary || '');
 
     // Extract request body if it exists
     let requestBody = {};
@@ -474,19 +477,21 @@ function getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAP
             respProps: {},
             respDescription: '',
             opDescription,
+            opSummary,
             requestBody
         };
     }
-    
+
     // Check if there's a content section with the mediaType
     const responseObj = dereferencedAPI.paths[path][httpVerb].responses[openAPIDocKey];
-    
+
     // If no content or no mediaType in the response, return empty properties
     if (!responseObj.content || !mediaType || !responseObj.content[mediaType] || !responseObj.content[mediaType].schema) {
         return {
             respProps: {},
             respDescription: responseObj.description || '',
             opDescription,
+            opSummary,
             requestBody
         };
     }
@@ -499,6 +504,7 @@ function getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAP
         respProps,
         respDescription: responseObj.description ? responseObj.description : respDescription,
         opDescription,
+        opSummary,
         requestBody
     };
 }
