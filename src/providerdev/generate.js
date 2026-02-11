@@ -345,8 +345,11 @@ export async function generate(options) {
         }
       }
       
-      // Write enriched spec
-      const outputPath = path.join(servicesPath, filename);
+      // Write enriched spec (always as YAML, ensuring .yaml extension)
+      const outputFilename = filename.endsWith('.json') 
+        ? filename.replace(/\.json$/, '.yaml') 
+        : filename;
+      const outputPath = path.join(servicesPath, outputFilename);
       writeSpec(outputPath, spec);
       logger.info(`✅ Wrote enriched spec: ${outputPath}`);
       
@@ -360,7 +363,7 @@ export async function generate(options) {
         name: serviceName,
         preferred: true,
         service: {
-          $ref: `${providerId}/${version}/services/${filename}`
+          $ref: `${providerId}/${version}/services/${outputFilename}`
         },
         title: specTitle,
         version: version,
