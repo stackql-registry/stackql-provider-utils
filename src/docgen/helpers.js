@@ -257,12 +257,19 @@ function formatProperties(respProps) {
         // Get the base description
         let fullDescription = propDetails.description || '';
         fullDescription = fullDescription.replace(/\n/g, ' ');
+
+        // Collect enum values from enum or x-enum keys
+        const enumValues = propDetails['enum'] || propDetails['x-enum'];
+        if (Array.isArray(enumValues) && enumValues.length > 0) {
+            fullDescription += ` (${enumValues.join(', ')})`;
+        }
+
         let additionalDescriptionPaths = [];
 
         // Add all other fields to description parts
         for (const [fieldName, fieldValue] of Object.entries(propDetails)) {
             // Skip the fields we're handling separately
-            if (fieldName === 'type' || fieldName === 'format' || fieldName === 'description') {
+            if (fieldName === 'type' || fieldName === 'format' || fieldName === 'description' || fieldName === 'enum' || fieldName === 'x-enum') {
                 continue;
             }
 
@@ -597,6 +604,12 @@ export function generateSchemaJsonFromProps(respProps, depth = 0, maxDepth = 4) 
 
         let propType = prop.type || 'object';
         let propDesc = sanitizeHtml(prop.description || '');
+
+        // Collect enum values from enum or x-enum keys
+        const enumValues = prop['enum'] || prop['x-enum'];
+        if (Array.isArray(enumValues) && enumValues.length > 0) {
+            propDesc += ` (${enumValues.join(', ')})`;
+        }
 
         // Add format info to type string if available
         if (prop.format) {
