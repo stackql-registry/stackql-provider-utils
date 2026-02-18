@@ -40,16 +40,21 @@ export function createInsertExamples(providerName, serviceName, resourceName, re
         // Create SQL example
         content += '\n\n```sql\nINSERT INTO ' + providerName + '.' + serviceName + '.' + resourceName + ' (\n';
         
-        // Add requestBody fields prefixed with data__ (excluding read-only props)
-        const reqBodyProps = methodDetails.requestBody?.properties 
+        // Add requestBody fields (excluding read-only props)
+        // If requestBodyTranslate.algorithm is 'naive', do not prefix with data__
+        const hasNaiveTranslate = methodDetails.methodConfig?.requestBodyTranslate?.algorithm === 'naive';
+
+        const reqBodyProps = methodDetails.requestBody?.properties
             ? Object.entries(methodDetails.requestBody.properties)
                 .filter(([_, propDetails]) => propDetails.readOnly !== true)
                 .map(([propName]) => propName)
             : [];
 
         const requiredBodyProps = methodDetails.requestBody?.required ? methodDetails.requestBody.required : [];
-            
-        const dataProps = reqBodyProps.map(prop => 'data__' + prop);
+
+        const dataProps = hasNaiveTranslate
+            ? reqBodyProps
+            : reqBodyProps.map(prop => 'data__' + prop);
         
         // Combine data props with params
         const requiredParams = Object.keys(methodDetails.requiredParams || {});
@@ -62,11 +67,18 @@ export function createInsertExamples(providerName, serviceName, resourceName, re
         // Start SELECT statement
         content += '\n)\nSELECT \n';
         
+        // Build a set of body prop names for quick lookup
+        const bodyPropSet = new Set(reqBodyProps);
+
         // Add values placeholders
         const valueLines = allFields.map(field => {
-            const isDataField = field.startsWith('data__');
-            const paramName = isDataField ? field.substring(6) : field;
-            
+            const isDataField = hasNaiveTranslate
+                ? bodyPropSet.has(field)
+                : field.startsWith('data__');
+            const paramName = isDataField
+                ? (hasNaiveTranslate ? field : field.substring(6))
+                : field;
+
             // Check for required body props
             let isRequiredBodyParam = false;
             if(isDataField){
@@ -78,13 +90,13 @@ export function createInsertExamples(providerName, serviceName, resourceName, re
             // Check if it's a number or boolean type
             let isNumber = false;
             let isBoolean = false;
-            
+
             if (isDataField && methodDetails.requestBody?.properties?.[paramName]) {
                 const propType = methodDetails.requestBody.properties[paramName].type;
                 isNumber = propType === 'number' || propType === 'integer';
                 isBoolean = propType === 'boolean';
             }
-            
+
             if (isNumber || isBoolean) {
                 return '{{ ' + paramName + ' }}' + (isRequiredBodyParam ? ' /* required */' : '');
             } else {

@@ -177,6 +177,8 @@ export async function generate(options) {
     providerId,
     servers = null,
     providerConfig = null,
+    serviceConfig = null,
+    naiveReqBodyTranslate = false,
     skipFiles = []
   } = options;
 
@@ -217,8 +219,19 @@ export async function generate(options) {
     return false;
   }
   
+  // Parse serviceConfig if provided
+  let serviceConfigJson = null;
+  if (serviceConfig) {
+    try {
+      serviceConfigJson = JSON.parse(serviceConfig);
+    } catch (error) {
+      logger.error(`❌ Failed to parse service config JSON: ${error.message}`);
+      return false;
+    }
+  }
+
   const providerServices = {};
-  
+
   try {
     const files = fs.readdirSync(inputDir);
     
@@ -302,10 +315,22 @@ export async function generate(options) {
           const pathRef = encodeRefPath(pathKey, verb);
           const responseInfo = getSuccessResponseInfo(operation);
           
-          const methodEntry = {
-            operation: { $ref: pathRef },
-            response: responseInfo
-          };
+          const methodEntry = {};
+
+          // Add requestBodyTranslate config for methods with request bodies
+          if (naiveReqBodyTranslate && ['post', 'put', 'patch'].includes(verb)) {
+            // Check if the operation actually has a request body
+            if (operation.requestBody) {
+              methodEntry.config = {
+                requestBodyTranslate: {
+                  algorithm: 'naive'
+                }
+              };
+            }
+          }
+
+          methodEntry.operation = { $ref: pathRef };
+          methodEntry.response = responseInfo;
 
           // Add objectKey to the response info if it exists in the manifest and is for a GET operation
           if (entry.stackql_object_key && verb === 'get') {
@@ -344,7 +369,12 @@ export async function generate(options) {
           return false;
         }
       }
-      
+
+      // Inject x-stackQL-config if serviceConfig is provided
+      if (serviceConfigJson) {
+        spec['x-stackQL-config'] = serviceConfigJson;
+      }
+
       // Write enriched spec (always as YAML, ensuring .yaml extension)
       const outputFilename = filename.endsWith('.json') 
         ? filename.replace(/\.json$/, '.yaml') 

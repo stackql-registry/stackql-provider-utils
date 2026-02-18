@@ -42,95 +42,100 @@ export function createUpdateExamples(providerName, serviceName, resourceName, re
         content += '\n\n```sql\n';
         content += (isReplace ? 'REPLACE ' : 'UPDATE ') + providerName + '.' + serviceName + '.' + resourceName;
         
+        // If requestBodyTranslate.algorithm is 'naive', do not prefix with data__
+        const hasNaiveTranslate = methodDetails.methodConfig?.requestBodyTranslate?.algorithm === 'naive';
+
         // Add SET clause with requestBody fields (excluding read-only props)
         content += '\nSET \n';
-        
+
         // Get request body fields (excluding read-only props)
-        const reqBodyProps = methodDetails.requestBody?.properties 
+        const reqBodyProps = methodDetails.requestBody?.properties
             ? Object.entries(methodDetails.requestBody.properties)
                 .filter(([_, propDetails]) => propDetails.readOnly !== true)
                 .map(([propName]) => propName)
             : [];
-        
-        // Add data__ prefixed fields to SET clause
+
+        // Add fields to SET clause (with or without data__ prefix)
         if (reqBodyProps.length > 0) {
             const setLines = reqBodyProps.map(prop => {
                 const propDetails = methodDetails.requestBody.properties[prop];
                 const isNumber = propDetails.type === 'number' || propDetails.type === 'integer';
                 const isBoolean = propDetails.type === 'boolean';
-                
+                const fieldName = hasNaiveTranslate ? prop : 'data__' + prop;
+
                 if (isNumber || isBoolean) {
-                    return 'data__' + prop + ' = {{ ' + prop + ' }}';
+                    return fieldName + ' = {{ ' + prop + ' }}';
                 } else {
-                    return 'data__' + prop + ' = \'{{ ' + prop + ' }}\'';
+                    return fieldName + ' = \'{{ ' + prop + ' }}\'';
                 }
             });
-            
+
             content += setLines.join(',\n');
         } else {
             content += '-- No updatable properties';
         }
-        
+
         // Add WHERE clause with parameters
         const requiredParams = Object.keys(methodDetails.requiredParams || {});
         const optionalParams = Object.keys(methodDetails.optionalParams || {});
-        
+
         // Get required body props (excluding read-only props)
-        const requiredBodyProps = methodDetails.requestBody?.required 
-            ? methodDetails.requestBody.required.filter(prop => 
-                methodDetails.requestBody.properties[prop] && 
+        const requiredBodyProps = methodDetails.requestBody?.required
+            ? methodDetails.requestBody.required.filter(prop =>
+                methodDetails.requestBody.properties[prop] &&
                 methodDetails.requestBody.properties[prop].readOnly !== true)
             : [];
-        
+
         if (requiredParams.length > 0 || requiredBodyProps.length > 0 || optionalParams.length > 0) {
 
             content += '\nWHERE \n';
-            
+
             // Add required parameters
             let clauseCount = 0;
-            
+
             // Add required query/path/header params
             requiredParams.forEach(param => {
                 if (clauseCount > 0) content += '\nAND ';
                 content += param + ' = \'{{ ' + param + ' }}\' --required';
                 clauseCount++;
             });
-            
+
             // Add required body params (only non-readonly ones)
             requiredBodyProps.forEach(prop => {
                 if (clauseCount > 0) content += '\nAND ';
-                
+
                 const propDetails = methodDetails.requestBody.properties[prop];
                 const isBoolean = propDetails.type === 'boolean';
-                
+                const fieldName = hasNaiveTranslate ? prop : 'data__' + prop;
+
                 if (isBoolean) {
-                    content += 'data__' + prop + ' = {{ ' + prop + ' }} --required';
+                    content += fieldName + ' = {{ ' + prop + ' }} --required';
                 } else {
-                    content += 'data__' + prop + ' = \'{{ ' + prop + ' }}\' --required';
+                    content += fieldName + ' = \'{{ ' + prop + ' }}\' --required';
                 }
-                
+
                 clauseCount++;
             });
-            
+
             // Add optional parameters
             optionalParams.forEach(param => {
                 if (clauseCount > 0) content += '\nAND ';
-                
+
                 // For boolean parameters, we can add a comment about their default value
                 const paramDetails = methodDetails.optionalParams[param];
                 const isBoolean = paramDetails.type === 'boolean';
                 const defaultValue = paramDetails.default;
-                
+
                 if (isBoolean) {
                     content += param + ' = {{ ' + param + '}}';
                 } else {
                     content += param + ' = \'{{ ' + param + '}}\'';
                 }
-                
+
                 if (isBoolean && defaultValue !== undefined) {
                     content += ' -- default: ' + defaultValue;
                 }
-                
+
                 clauseCount++;
             });
         }

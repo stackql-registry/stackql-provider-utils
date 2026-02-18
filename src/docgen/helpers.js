@@ -159,6 +159,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
                     optionalParams: optionalParams || {},
                     requestBody: requestBody || {},
                     rawRespProps: respProps,
+                    methodConfig: methodData.config || null,
                 };
 
                 // Format and sort the properties using our helper functions
@@ -177,7 +178,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
     }
 
     for (const thisMethod of resourceData.sqlVerbs[sqlVerb]) {
-        const {path, httpVerb, mediaType, openAPIDocKey, objectKey, methodName} = getHttpOperationForSqlVerb(thisMethod.$ref, resourceData);
+        const {path, httpVerb, mediaType, openAPIDocKey, objectKey, methodName, methodConfig} = getHttpOperationForSqlVerb(thisMethod.$ref, resourceData);
         const {respProps, respDescription, opDescription, opSummary, requestBody} = getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey);
         const {requiredParams, optionalParams} = getHttpOperationParams(dereferencedAPI, path, httpVerb);
 
@@ -191,6 +192,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
             optionalParams: optionalParams || {},
             requestBody: requestBody || {},
             rawRespProps: respProps,
+            methodConfig: methodConfig || null,
         };
 
         // Format and sort the properties using our helper functions
@@ -362,13 +364,14 @@ function getHttpOperationForSqlVerb(sqlVerbRef, resourceData){
     const httpVerb = operationRef.split('/').pop()
     const path = operationRef.split('/')[0].replaceAll('~1','/');
 
-    return { 
-        path, 
-        httpVerb, 
-        mediaType: methodObj.response.mediaType,  
+    return {
+        path,
+        httpVerb,
+        mediaType: methodObj.response.mediaType,
         openAPIDocKey: methodObj.response.openAPIDocKey,
         objectKey: methodObj.response.objectKey || false,
-        methodName 
+        methodName,
+        methodConfig: methodObj.config || null
     }
 }
 

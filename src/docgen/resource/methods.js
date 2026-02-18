@@ -9,15 +9,18 @@ const getRequiredBodyParams = (methodDetails, accessType) => {
     if (!['insert', 'update', 'replace', 'exec'].includes(accessType)) {
         return [];
     }
-    
+
     // Get required body params if they exist
     const requiredBodyProps = methodDetails.requestBody?.required ? methodDetails.requestBody.required : [];
-    
-    // For insert, update, and replace, prefix with data__
-    if (['insert', 'update', 'replace'].includes(accessType)) {
+
+    // Check if requestBodyTranslate.algorithm is 'naive' - if so, don't prefix with data__
+    const hasNaiveTranslate = methodDetails.methodConfig?.requestBodyTranslate?.algorithm === 'naive';
+
+    // For insert, update, and replace, prefix with data__ (unless naive translate is set)
+    if (['insert', 'update', 'replace'].includes(accessType) && !hasNaiveTranslate) {
         return requiredBodyProps.map(prop => `data__${prop}`);
     } else {
-        // For exec, don't prefix
+        // For exec or naive translate, don't prefix
         return requiredBodyProps;
     }
 };
