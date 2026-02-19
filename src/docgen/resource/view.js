@@ -23,8 +23,8 @@ export function docView(resourceData) {
         for (const field of fields) {
             content += `
 <tr>
-    <td>${field.name}</td>
-    <td>${field.type}</td>
+    <td><CopyableCode code="${field.name}" /></td>
+    <td><CopyableCode code="${field.type}" /></td>
     <td>${field.description}</td>
 </tr>`;
         }
