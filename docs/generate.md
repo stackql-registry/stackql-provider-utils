@@ -14,8 +14,6 @@ async function generate(options) {
 }
 ```
 
-## Parameters
-
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `inputDir` | string | Yes | Directory containing split service files |
@@ -24,6 +22,8 @@ async function generate(options) {
 | `providerId` | string | Yes | Provider identifier |
 | `servers` | Array\<Object\> | No | Server configuration (URLs, variables) |
 | `providerConfig` | Object | No | Provider-specific configuration (auth, etc.) |
+| `serviceConfig` | Object | No | Service-level configuration injected as `x-stackQL-config` at the root of each service spec (e.g., pagination settings) |
+| `naiveReqBodyTranslate` | boolean | No | When `true`, adds `config.requestBodyTranslate.algorithm: naive` to every method with a request body (POST, PUT, PATCH). Also causes doc generation to omit the `data__` prefix on insert/update/replace fields. (default: false) |
 | `skipFiles` | Array\<string\> | No | List of files to skip during generation |
 | `overwrite` | boolean | No | Whether to overwrite existing files (default: false) |
 | `verbose` | boolean | No | Whether to output detailed logs (default: false) |

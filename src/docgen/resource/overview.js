@@ -33,7 +33,7 @@ content += `
 
 ## Overview
 <table><tbody>
-<tr><td><b>Name</b></td><td><code>${resourceName}</code></td></tr>
+<tr><td><b>Name</b></td><td><CopyableCode code="${resourceName}" /></td></tr>
 <tr><td><b>Type</b></td><td>${resourceType}</td></tr>
 <tr><td><b>Id</b></td><td><CopyableCode code="${providerName}.${serviceName}.${resourceName}" /></td></tr>
 </tbody></table>
@@ -73,7 +73,7 @@ content += `
 
 ## Overview
 <table><tbody>
-<tr><td><b>Name</b></td><td><code>${resourceName}</code></td></tr>
+<tr><td><b>Name</b></td><td><CopyableCode code="${resourceName}" /></td></tr>
 <tr><td><b>Type</b></td><td>${resourceType}</td></tr>
 <tr><td><b>Id</b></td><td><CopyableCode code="${providerName}.${serviceName}.${resourceName}" /></td></tr>
 </tbody></table>
