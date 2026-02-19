@@ -36,7 +36,7 @@ export function docView(resourceData) {
     }
 
     // Add required params section if exists
-    const requiredParams = resourceData.config?.views?.requiredParams ?? [];
+    const requiredParams = resourceData.config?.docs?.requiredParams ?? [];
     if (requiredParams.length > 0) {
         // add the table
         content += `## Required Parameters\n\n`;
@@ -64,6 +64,33 @@ export function docView(resourceData) {
         content += `
 </tbody>
 </table>\n\n`;
+    }
+
+    // SELECT examples section
+    content += `## \`SELECT\` Examples\n\n`;
+
+    // Compose example queries based on fields and required params
+    const fqViewName = resourceData.id ?? 'view_name';
+    const fieldList = fields.length > 0
+        ? fields.map(f => f.name).join(',\n  ')
+        : '*';
+
+    if (requiredParams.length > 0) {
+        const whereClause = requiredParams
+            .map(p => `${p.name} = '{{ ${p.name} }}'`)
+            .join('\n  AND ');
+        content += `\`\`\`sql
+SELECT
+  ${fieldList}
+FROM ${fqViewName}
+WHERE ${whereClause};
+\`\`\`\n\n`;
+    } else {
+        content += `\`\`\`sql
+SELECT
+  ${fieldList}
+FROM ${fqViewName};
+\`\`\`\n\n`;
     }
 
     // SQL Definition section
