@@ -3,7 +3,7 @@ export function docView(resourceData) {
 
     let content = '';
 
-    const fields = resourceData.config?.views?.fields ?? [];
+    const fields = resourceData.config?.docs?.fields ?? [];
 
     if (fields.length === 0) {
         content += `See the SQL Definition (view DDL) for fields returned by this view.\n\n`;
