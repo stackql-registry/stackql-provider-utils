@@ -54,8 +54,8 @@ export function docView(resourceData) {
         for (const param of requiredParams) {
             content += `
 <tr>
-    <td>${param.name}</td>
-    <td>${param.type}</td>
+    <td><CopyableCode code="${param.name}" /></td>
+    <td><CopyableCode code="${param.type}" /></td>
     <td>${param.description}</td>
 </tr>`;
         }
