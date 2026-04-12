@@ -1,4 +1,6 @@
 // src/docgen/resource/view.js
+import { sanitizeHtml } from '../helpers.js';
+
 export function docView(resourceData) {
 
     let content = '';
@@ -25,7 +27,7 @@ export function docView(resourceData) {
 <tr>
     <td><CopyableCode code="${field.name}" /></td>
     <td><CopyableCode code="${field.type}" /></td>
-    <td>${field.description}</td>
+    <td>${sanitizeHtml(field.description)}</td>
 </tr>`;
         }
 
@@ -56,7 +58,7 @@ export function docView(resourceData) {
 <tr>
     <td><CopyableCode code="${param.name}" /></td>
     <td><CopyableCode code="${param.type}" /></td>
-    <td>${param.description}</td>
+    <td>${sanitizeHtml(param.description)}</td>
 </tr>`;
         }
 
