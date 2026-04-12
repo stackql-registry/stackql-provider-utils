@@ -294,7 +294,16 @@ export async function generate(options) {
           const resource = entry.stackql_resource_name;
           const method = entry.stackql_method_name;
           const sqlverb = entry.stackql_verb;
-          
+
+          // Warn about any fields that are missing in the manifest entry
+          const missingMappings = [];
+          if (!resource) missingMappings.push('resource');
+          if (!method) missingMappings.push('method_name');
+          if (!sqlverb) missingMappings.push('stackql_verb');
+          if (missingMappings.length > 0) {
+            logger.warn(`${filename}/${operationId} is not mapped to a ${missingMappings.join(', ')}`);
+          }
+
           // Initialize resource if it doesn't exist
           if (!resources[resource]) {
             resources[resource] = {
