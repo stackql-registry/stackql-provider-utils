@@ -94,6 +94,27 @@ The generated `all_services.csv` file includes the following columns:
 
 The last three columns (`stackql_resource_name`, `stackql_method_name`, `stackql_verb`) are initially empty or populated with existing mappings if found in the spec. They can be updated manually based on your desired StackQL provider structure.
 
+## Missing Mappings
+
+After applying all automatic defaults, `analyze` checks each operation for unmapped fields and logs a `WARN` message for any that are still empty:
+
+```
+agentpools.yaml/getAgentPoolsUpdateSettings is not mapped to a resource
+users.yaml/createUser is not mapped to a resource, method_name
+```
+
+Only the fields that are actually empty are included in the message. The three fields checked are:
+
+| Field | When it appears in the warning |
+|---|---|
+| `resource` | `stackql_resource_name` is empty — no existing mapping was found in the spec and no `x-stackql-resource` annotation is present. This is the most common case and always requires manual intervention. |
+| `method_name` | `stackql_method_name` is empty — only occurs when the operation has no `operationId`. |
+| `stackql_verb` | `stackql_verb` is empty — effectively never occurs because a default is derived from the HTTP verb (`get` → `select`, `post` → `insert`, etc.). |
+
+These warnings indicate rows in `all_services.csv` that need to be filled in before running `generate`. `analyze` still writes the row to the CSV (with the empty fields) so you have a complete record of every operation to work from.
+
+> **Tip:** After filling in the CSV, re-run `analyze` — it skips rows that are already fully mapped, so only genuinely new or incomplete operations are reported.
+
 ## Working with the Mapping File
 
 1. **Review the generated mapping file**: Open the CSV file and review all operations

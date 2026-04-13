@@ -377,7 +377,16 @@ export async function analyze(options) {
           if (!objectKey && verb === 'get') {
             objectKey = detectObjectKey(spec, operation);
           }
-          
+
+          // Warn about any fields that are still unmapped after all defaults
+          const missingMappings = [];
+          if (!resourceName) missingMappings.push('resource');
+          if (!methodName) missingMappings.push('method_name');
+          if (!sqlVerb) missingMappings.push('stackql_verb');
+          if (missingMappings.length > 0) {
+            logger.warn(`${filename}/${operationId} is not mapped to a ${missingMappings.join(', ')}`);
+          }
+
           // Get operation description
           const opDescription = operation.summary || operation.description || '';
           
