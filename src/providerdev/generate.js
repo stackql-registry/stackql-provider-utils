@@ -4,6 +4,7 @@ import yaml from 'js-yaml';
 import csv from 'csv-parser';
 import logger from '../logger.js';
 import { createReadStream } from 'fs';
+import { camelToSnake } from '../utils.js';
 
 /**
  * Load manifest from CSV file
@@ -165,6 +166,69 @@ function sortOperationsBySpecificity(resources, spec) {
 }
 
 /**
+ * Rename all path parameter names (in: path only) to snake_case as a
+ * preprocessing step before x-stackQL-resources is generated.
+ *
+ * Three passes:
+ *   1. components/parameters — rename the `name` field where in === 'path'
+ *      (component keys / $ref paths are left untouched)
+ *   2. Inline parameters at path-item and operation level — same rule
+ *   3. Rebuild spec.paths with snake_case {placeholder} tokens in the keys
+ *
+ * Returns { spec, pathKeyMap } where pathKeyMap maps each new path string to
+ * its original string (used so the CSV manifest lookup still works).
+ *
+ * @param {Object} spec - OpenAPI spec (mutated in place for parameter names;
+ *                        spec.paths is replaced with a new object)
+ * @returns {{ spec: Object, pathKeyMap: Object }}
+ */
+function normalizePathParamNames(spec) {
+  const validVerbs = ['get', 'post', 'put', 'patch', 'delete'];
+
+  // Pass 1: components/parameters
+  for (const compParam of Object.values(spec.components?.parameters || {})) {
+    if (compParam.in === 'path' && compParam.name) {
+      compParam.name = camelToSnake(compParam.name);
+    }
+  }
+
+  // Pass 2: inline parameters at path-item and operation level
+  for (const pathItem of Object.values(spec.paths || {})) {
+    for (const param of pathItem.parameters || []) {
+      if (!param.$ref && param.in === 'path' && param.name) {
+        param.name = camelToSnake(param.name);
+      }
+    }
+    for (const verb of validVerbs) {
+      for (const param of pathItem[verb]?.parameters || []) {
+        if (!param.$ref && param.in === 'path' && param.name) {
+          param.name = camelToSnake(param.name);
+        }
+      }
+    }
+  }
+
+  // Pass 3: rename {placeholder} tokens in path URL strings and rebuild
+  // spec.paths with the new keys
+  const newPaths = {};
+  const pathKeyMap = {}; // newPath → originalPath
+
+  for (const [originalPath, pathItem] of Object.entries(spec.paths || {})) {
+    const newPath = originalPath.replace(
+      /\{([^}]+)\}/g,
+      (_, paramName) => `{${camelToSnake(paramName)}}`
+    );
+    newPaths[newPath] = pathItem;
+    if (newPath !== originalPath) {
+      pathKeyMap[newPath] = originalPath;
+    }
+  }
+
+  spec.paths = newPaths;
+  return { spec, pathKeyMap };
+}
+
+/**
  * Generate StackQL provider extensions
  * @param {Object} options - Options for generation
  * @returns {Promise<boolean>} - Success status
@@ -179,6 +243,7 @@ export async function generate(options) {
     providerConfig = null,
     serviceConfig = null,
     naiveReqBodyTranslate = false,
+    updatePathParamNames = false,
     skipFiles = []
   } = options;
 
@@ -260,8 +325,14 @@ export async function generate(options) {
       console.log(`processing service: ${serviceName}`);
 
       const specPath = path.join(inputDir, filename);
-      const spec = loadSpec(specPath);
-      
+      let spec = loadSpec(specPath);
+
+      // Preprocessing: convert path parameter names to snake_case
+      let pathKeyMap = {};
+      if (updatePathParamNames) {
+        ({ spec, pathKeyMap } = normalizePathParamNames(spec));
+      }
+
       // Initialize resources object with defaultdict-like behavior
       const resources = {};
 
@@ -284,7 +355,8 @@ export async function generate(options) {
             continue;
           }
           
-          const manifestKey = `${filename}::${pathKey}::${verb}`;
+          const originalPathKey = pathKeyMap[pathKey] || pathKey;
+          const manifestKey = `${filename}::${originalPathKey}::${verb}`;
           const entry = manifest[manifestKey];
           if (!entry) {
             logger.error(`❌ ERROR: ${filename} → ${operationId} not found in manifest`);
