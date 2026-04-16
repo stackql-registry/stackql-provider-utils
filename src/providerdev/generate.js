@@ -290,7 +290,21 @@ export async function generate(options) {
             logger.error(`❌ ERROR: ${filename} → ${operationId} not found in manifest`);
             return false;
           }
-          
+
+          /**
+           * `skip_this_resource` sentinel: when the manifest row's
+           * stackql_resource_name equals this literal, bypass registration
+           * under components.x-stackQL-resources without mutating the spec.
+           * Needed for operations that can't be registered as StackQL methods
+           * (e.g. endpoints with no 2xx response such as 302-only downloads)
+           * or vendor-specific operations the provider doesn't want to expose,
+           * while still leaving the raw operation in spec.paths.
+           */
+          if (entry.stackql_resource_name === 'skip_this_resource') {
+            logger.info(`Skipping operation ${filename} -> ${operationId} (marked skip_this_resource)`);
+            continue;
+          }
+
           const resource = entry.stackql_resource_name;
           const method = entry.stackql_method_name;
           const sqlverb = entry.stackql_verb;

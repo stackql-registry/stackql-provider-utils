@@ -132,6 +132,17 @@ outputDir/
 │           └── ...
 ```
 
+## Skipping Operations via the Manifest
+
+To leave an operation in the source OpenAPI spec but exclude it from the generated `components.x-stackQL-resources` block, set its `stackql_resource_name` column to the literal string `skip_this_resource` in the manifest CSV. The operation is bypassed before the 2xx response check, so this also lets you process specs that contain operations with no 2xx response (e.g. 302-only download endpoints). The operation remains untouched in `spec.paths`; no method entry is created and no `sqlVerbs[...]` reference is added. Rows with any other value (including empty string) are unaffected.
+
+Example row:
+
+```csv
+filename,path,verb,stackql_resource_name,stackql_method_name,stackql_verb,stackql_object_key
+downloads.yaml,/files/{id}/download,get,skip_this_resource,,,
+```
+
 ## Authentication Types
 
 StackQL supports various authentication types, which can be configured in the `providerConfig` parameter:
