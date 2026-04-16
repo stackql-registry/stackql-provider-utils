@@ -270,20 +270,20 @@ export function createInsertExamples(providerName, serviceName, resourceName, re
     // Collect all unique params and request body props across all methods
     const allParams = {};
     const allRequestBodyProps = {};
-    
+
     Object.values(insertMethods).forEach(method => {
         // Add required params
         Object.entries(method.requiredParams || {}).forEach(([name, details]) => {
             allParams[name] = { ...details, required: true };
         });
-        
+
         // Add optional params
         Object.entries(method.optionalParams || {}).forEach(([name, details]) => {
             if (!allParams[name]) {
                 allParams[name] = { ...details, required: false };
             }
         });
-        
+
         // Add request body props (excluding read-only props)
         if (method.requestBody && method.requestBody.properties) {
             Object.entries(method.requestBody.properties)
@@ -293,7 +293,7 @@ export function createInsertExamples(providerName, serviceName, resourceName, re
                 });
         }
     });
-    
+
     // Add required params first
     Object.entries(allParams)
         .filter(([_, details]) => details.required)
@@ -317,6 +317,7 @@ export function createInsertExamples(providerName, serviceName, resourceName, re
             manifestYaml += '      value: ' + formatTemplateValue(name, type) + '\n';
 
             if (description) {
+                manifestYaml += '      description: ' + description + '\n';
                 manifestYaml += '      description: ' + description + '\n';
             }
         });
