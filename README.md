@@ -12,6 +12,7 @@ A comprehensive toolkit for transforming OpenAPI specifications into StackQL pro
 - [Directory Structure](#directory-structure)
 - [Provider Development Workflow](#provider-development-workflow)
   - [`providerdev.split`](docs/split.md) - Divide a large OpenAPI specification into smaller, service-specific files
+  - [`providerdev.normalize`](docs/normalize.md) - Reshape split specs for relational consumption (flatten allOf, rename oneOf/anyOf, strip misplaced keywords, lower opaque objects)
   - [`providerdev.analyze`](docs/analyze.md) - Examine split API specifications to generate mapping recommendations
   - [`providerdev.generate`](docs/generate.md) - Create StackQL provider extensions from specifications and mappings
   - [`docgen.generateDocs`](docs/docgen.md) - Generate comprehensive documentation for StackQL providers
@@ -77,9 +78,10 @@ A typical project structure for the development of a `stackql` provider would be
 The library provides a streamlined workflow for creating StackQL providers from OpenAPI specifications:
 
 1. [`providerdev.split`](docs/split.md) - Divide a large OpenAPI specification into smaller, service-specific files
-2. [`providerdev.analyze`](docs/analyze.md) - Examine split API specifications to generate mapping recommendations
-3. [`providerdev.generate`](docs/generate.md) - Create StackQL provider extensions from specifications and mappings
-4. [`docgen.generateDocs`](docs/docgen.md) - Generate comprehensive documentation for StackQL providers
+2. [`providerdev.normalize`](docs/normalize.md) - Reshape split specs for relational consumption (flatten allOf, rename oneOf/anyOf, strip misplaced keywords, lower opaque objects)
+3. [`providerdev.analyze`](docs/analyze.md) - Examine split API specifications to generate mapping recommendations
+4. [`providerdev.generate`](docs/generate.md) - Create StackQL provider extensions from specifications and mappings
+5. [`docgen.generateDocs`](docs/docgen.md) - Generate comprehensive documentation for StackQL providers
 
 ## Contributing
 

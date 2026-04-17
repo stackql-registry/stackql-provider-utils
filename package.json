@@ -1,6 +1,6 @@
 {
   "name": "@stackql/provider-utils",
-  "version": "0.6.01",
+  "version": "0.6.2",
   "description": "Utilities for building StackQL providers from OpenAPI specifications.",
   "type": "module",
   "main": "./src/index.js",
@@ -12,8 +12,13 @@
       "import": "./src/docgen/index.js"
     }
   },
+  "bin": {
+    "provider-dev-utils": "./bin/provider-dev-utils.mjs",
+    "docgen-utils": "./bin/docgen-utils.mjs"
+  },
   "files": [
     "src/",
+    "bin/",
     "LICENSE",
     "README.md",
     ".npmrc"
