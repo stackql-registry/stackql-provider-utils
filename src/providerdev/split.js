@@ -34,24 +34,39 @@ function isOperationExcluded(exclude, opItem) {
 }
 
 /**
+ * Normalize a raw service name returned by a discriminator into the
+ * filesystem-safe identifier used as the service key (lowercase, with
+ * hyphens / spaces / dots collapsed to underscores).
+ * @param {string} raw
+ * @returns {string}
+ */
+function normalizeServiceName(raw) {
+  return String(raw).toLowerCase().replace(/-/g, '_').replace(/ /g, '_').replace(/\./g, '_');
+}
+
+/**
  * Determine service name and description using discriminator
  * @param {string} providerName - Provider name
  * @param {Object} opItem - Operation item
  * @param {string} pathKey - Path key
- * @param {string} svcDiscriminator - Service discriminator
+ * @param {string} svcDiscriminator - Service discriminator ("tag", "path", or "function")
  * @param {Object[]} allTags - All tags from API doc
  * @param {boolean} debug - Debug flag
  * @param {Object} svcNameOverrides - Service name overrides
+ * @param {Function} [svcDiscriminatorFn] - User-supplied function used when svcDiscriminator === "function".
+ *   Called as fn(pathKey, operationId, tags, { providerName, pathItem, operation }).
+ *   Should return a service name string, or "skip"/null/undefined to skip the operation.
+ * @param {Object} [pathItem] - The full path item (for context when invoking svcDiscriminatorFn)
  * @returns {[string, string]} - [service name, service description]
  */
-function retServiceNameAndDesc(providerName, opItem, pathKey, svcDiscriminator, allTags, debug, svcNameOverrides) {
+function retServiceNameAndDesc(providerName, opItem, pathKey, svcDiscriminator, allTags, debug, svcNameOverrides, svcDiscriminatorFn, pathItem) {
   let service = "default";
   let serviceDesc = `${providerName} API`;
-  
+
   // Use tags if discriminator is "tag"
   if (svcDiscriminator === "tag" && opItem.tags && opItem.tags.length > 0) {
-    service = opItem.tags[0].toLowerCase().replace(/-/g, '_').replace(/ /g, '_');
-    
+    service = normalizeServiceName(opItem.tags[0]);
+
     // Find description in all_tags
     for (const tag of allTags) {
       if (tag.name === service) {
@@ -60,7 +75,7 @@ function retServiceNameAndDesc(providerName, opItem, pathKey, svcDiscriminator, 
       }
     }
   }
-  
+
   // Use first significant path segment if discriminator is "path"
   else if (svcDiscriminator === "path") {
     const pathParts = pathKey.replace(/^\//, '').split('/');
@@ -72,11 +87,35 @@ function retServiceNameAndDesc(providerName, opItem, pathKey, svcDiscriminator, 
         if (lowerPart === 'api' || /^v\d+$/.test(lowerPart) || /^\{.*version\}$/i.test(part)) {
           continue;
         }
-        service = lowerPart.replace(/-/g, '_').replace(/ /g, '_').replace(/\./g, '_');
+        service = normalizeServiceName(lowerPart);
         break;
       }
       serviceDesc = `${providerName} ${service} API`;
     }
+  }
+
+  // Use a user-supplied function if discriminator is "function"
+  else if (svcDiscriminator === "function") {
+    if (typeof svcDiscriminatorFn !== 'function') {
+      throw new Error('svcDiscriminator is "function" but no svcDiscriminatorFn was provided');
+    }
+    const tags = Array.isArray(opItem.tags) ? opItem.tags : [];
+    const operationId = opItem.operationId || null;
+    const raw = svcDiscriminatorFn(pathKey, operationId, tags, { providerName, pathItem, operation: opItem });
+    if (raw === null || raw === undefined || raw === '') {
+      return ["skip", ""];
+    }
+    service = normalizeServiceName(raw);
+    // Prefer a tag description matching the returned service name; otherwise
+    // fall back to a generic "<provider> <service> API".
+    let matched = null;
+    for (const tag of allTags) {
+      if (tag.name && normalizeServiceName(tag.name) === service) {
+        matched = tag.description || null;
+        break;
+      }
+    }
+    serviceDesc = matched || `${providerName} ${service} API`;
   }
 
   // Check if service should be skipped
@@ -91,8 +130,10 @@ function retServiceNameAndDesc(providerName, opItem, pathKey, svcDiscriminator, 
       logger.debug(`Overriding service name: ${service} -> ${newName}`);
     }
     
-    // Update service description for path-based services
-    if (svcDiscriminator === "path") {
+    // Update service description for discriminators that synthesize the desc
+    // from the service name (path / function). For tag mode the description
+    // came from the original tag and is left intact.
+    if (svcDiscriminator === "path" || svcDiscriminator === "function") {
       serviceDesc = `${providerName} ${newName} API`;
     }
     
@@ -315,22 +356,28 @@ export async function split(options) {
     providerName,
     outputDir,
     svcDiscriminator = "tag",
+    svcDiscriminatorFn = null,
     exclude = null,
     overwrite = true,
     verbose = false,
     svcNameOverrides = {}  // Add this new parameter with default empty object
   } = options;
-  
+
   // Setup logging based on verbosity
   if (verbose) {
     logger.level = 'debug';
   }
-  
+
   logger.info(`🔄 Splitting OpenAPI doc for ${providerName}`);
   logger.info(`API Doc: ${apiDoc}`);
   logger.info(`Output: ${outputDir}`);
   logger.info(`Service Discriminator: ${svcDiscriminator}`);
-  
+
+  if (svcDiscriminator === "function" && typeof svcDiscriminatorFn !== 'function') {
+    logger.error('❌ svcDiscriminator is "function" but svcDiscriminatorFn was not supplied or is not callable');
+    return false;
+  }
+
   if (Object.keys(svcNameOverrides).length > 0) {
     logger.info(`Using ${Object.keys(svcNameOverrides).length} service name overrides`);
     if (verbose) {
@@ -397,9 +444,10 @@ export async function split(options) {
       }
       
       const [service, serviceDesc] = retServiceNameAndDesc(
-        providerName, opItem, pathKey, svcDiscriminator, 
-        apiDocObj.tags || [], verbose, svcNameOverrides
-      );      
+        providerName, opItem, pathKey, svcDiscriminator,
+        apiDocObj.tags || [], verbose, svcNameOverrides,
+        svcDiscriminatorFn, pathItem
+      );
 
       // Skip if service is marked to skip
       if (service === 'skip') {

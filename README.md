@@ -36,6 +36,66 @@ npm install @stackql/provider-utils
 yarn add @stackql/provider-utils
 ```
 
+## Consumer Setup: npm scripts
+
+The package ships two CLI entry points: `provider-dev-utils` (for `split` / `normalize` / `analyze` / `generate`) and `docgen-utils` (for `generate-docs` / `generate-docs-v2`). Wrap them as npm scripts in your provider repo's `package.json` so every step of the workflow is a single `npm run <step>` invocation:
+
+```json
+{
+  "scripts": {
+    "split":             "node node_modules/@stackql/provider-utils/bin/provider-dev-utils.mjs split",
+    "normalize":         "node node_modules/@stackql/provider-utils/bin/provider-dev-utils.mjs normalize",
+    "generate-mappings": "node node_modules/@stackql/provider-utils/bin/provider-dev-utils.mjs analyze",
+    "generate-provider": "node node_modules/@stackql/provider-utils/bin/provider-dev-utils.mjs generate",
+    "generate-docs":     "node node_modules/@stackql/provider-utils/bin/docgen-utils.mjs generate-docs"
+  }
+}
+```
+
+Call the bins through `node` (rather than relying on `node_modules/.bin/` shims) because npm does not always link `.bin` shims for `.mjs` files on Windows. Pass flags through with npm's `--` separator, e.g.:
+
+```bash
+npm run normalize -- --api-dir provider-dev/source --verbose
+```
+
+JSON-valued flags (`--servers`, `--provider-config`, `--service-config`, `--skip-files`, `--svc-name-overrides`) accept either an inline JSON string or a path to a JSON file.
+
+### Full workflow example
+
+```bash
+npm run split -- \
+  --provider-name github \
+  --api-doc provider-dev/downloaded/api.github.com.json \
+  --svc-discriminator tag \
+  --output-dir provider-dev/source \
+  --overwrite
+
+npm run normalize -- \
+  --api-dir provider-dev/source \
+  --verbose
+
+npm run generate-mappings -- \
+  --input-dir provider-dev/source \
+  --output-dir provider-dev/config
+
+npm run generate-provider -- \
+  --provider-name github \
+  --input-dir provider-dev/source \
+  --output-dir provider-dev/openapi/src/github \
+  --config-path provider-dev/config/all_services.csv \
+  --servers '[{"url": "https://api.github.com"}]' \
+  --provider-config '{"auth": {"type": "basic", "username_var": "STACKQL_GITHUB_USERNAME", "password_var": "STACKQL_GITHUB_PASSWORD"}}' \
+  --overwrite
+
+npm run generate-docs -- \
+  --provider-name github \
+  --provider-dir ./provider-dev/openapi/src/github/v00.00.00000 \
+  --output-dir ./website \
+  --provider-data-dir ./provider-dev/docgen/provider-data
+```
+
+On `generate-provider`, `--provider-name` is accepted as an alias for `--provider-id` so the flag name is consistent with the other commands.
+
 ## Directory Structure
 
 A typical project structure for the development of a `stackql` provider would be...

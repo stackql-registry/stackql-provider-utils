@@ -21,7 +21,8 @@ async function split(options) {
 | `apiDoc` | string | Yes | Path to the OpenAPI specification file |
 | `providerName` | string | Yes | Name of the provider (e.g., 'github', 'aws') |
 | `outputDir` | string | Yes | Directory for output files |
-| `svcDiscriminator` | string | Yes | Method for determining services ('tag' or 'path') |
+| `svcDiscriminator` | string | Yes | Method for determining services ('tag', 'path', or 'function') |
+| `svcDiscriminatorFn` | function | Conditional | User-supplied service-mapping function. Required when `svcDiscriminator` is `'function'`. |
 | `overwrite` | boolean | No | Whether to overwrite existing files (default: false) |
 | `verbose` | boolean | No | Whether to output detailed logs (default: false) |
 | `svcNameOverrides` | object | No | Map of service names to override (default: {}) |
@@ -33,6 +34,82 @@ The `svcDiscriminator` parameter determines how services are identified:
 - **tag**: Uses OpenAPI tags to group operations into services. This is ideal for well-organized APIs where operations are properly tagged by service or resource type.
 
 - **path**: Uses URL path patterns to determine service boundaries. This is useful for APIs that follow a consistent URL structure but may not have proper tagging.
+
+- **function**: Delegates the service-name decision to a user-supplied function. This is useful for providers whose tags or paths do not cleanly map to services - for example Confluent, where tags include both `API Keys (iam/v2)` (which should map to `iam`) and `Schemas (v1)` (which should map to `schemas`). The function is called once per operation as the splitter walks the spec, and its return value is used as the service name.
+
+### Function discriminator
+
+When `svcDiscriminator` is `'function'`, supply `svcDiscriminatorFn` either as a JavaScript function (programmatic API) or as a path to a `.js` / `.mjs` module that exports the function as the default export (CLI - via `--svc-discriminator-fn FILE`).
+
+The function is invoked as:
+
+```javascript
+svcDiscriminatorFn(path, operationId, tags, context)
+```
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `path` | string | The OpenAPI path key, e.g. `/iam/v2/api-keys` |
+| `operationId` | string \| null | The operation's `operationId`, or `null` if absent |
+| `tags` | string[] | The operation's `tags` array (empty if none) |
+| `context` | object | `{ providerName, pathItem, operation }` for advanced cases |
+
+The function should return:
+
+- A non-empty string - used as the service name (lowercased; hyphens, spaces and dots are converted to underscores).
+- `null`, `undefined`, `''`, or the literal string `'skip'` - the operation is skipped.
+
+`svcNameOverrides` is applied after the function returns, so it can still be used to remap the function's output.
+
+#### Example: Confluent canonical-ref pattern
+
+Tags like `API Keys (iam/v2)` should map to `iam`; tags like `Schemas (v1)` should map to `schemas`. Save the following as e.g. `provider-dev/scripts/confluent-svc.mjs`:
+
+```javascript
+// confluent-svc.mjs
+export default function confluentSvc(path, operationId, tags) {
+  const tag = tags && tags[0];
+  if (!tag) return null;
+
+  // "API Keys (iam/v2)"  -> "iam"
+  // "Schemas (v1)"       -> "schemas"
+  const m = tag.match(/\(([^)]+)\)\s*$/);
+  if (m) {
+    const inside = m[1];
+    const slash = inside.indexOf('/');
+    return slash >= 0 ? inside.slice(0, slash) : tag.replace(/\s*\([^)]*\)\s*$/, '');
+  }
+  return tag;
+}
+```
+
+Run via the CLI:
+
+```bash
+npm run split -- \
+  --provider-name confluent \
+  --api-doc provider-dev/downloaded/confluent.yaml \
+  --svc-discriminator function \
+  --svc-discriminator-fn provider-dev/scripts/confluent-svc.mjs \
+  --output-dir provider-dev/source \
+  --overwrite
+```
+
+Or programmatically:
+
+```javascript
+import { providerdev } from '@stackql/provider-utils';
+import confluentSvc from './provider-dev/scripts/confluent-svc.mjs';
+
+await providerdev.split({
+  apiDoc: './provider-dev/downloaded/confluent.yaml',
+  providerName: 'confluent',
+  outputDir: './provider-dev/source',
+  svcDiscriminator: 'function',
+  svcDiscriminatorFn: confluentSvc,
+  overwrite: true,
+});
+```
 
 ## Service Name Overrides
 
