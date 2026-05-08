@@ -229,6 +229,114 @@ function normalizePathParamNames(spec) {
 }
 
 /**
+ * Dedent a YAML fragment that lives at the resource-key indentation level
+ * (typically 4 spaces because the fragment is intended to be spliced under
+ * `components.x-stackQL-resources`). Detects the smallest leading indent
+ * across non-blank lines and strips that many leading spaces from every
+ * line, so the result parses as a top-level YAML mapping.
+ * @param {string} text
+ * @returns {string}
+ */
+function dedentYamlFragment(text) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  let minIndent = Infinity;
+  for (const line of lines) {
+    if (line.trim() === '') continue;
+    const m = line.match(/^( *)\S/);
+    if (!m) continue;
+    if (m[1].length < minIndent) minIndent = m[1].length;
+    if (minIndent === 0) break;
+  }
+  if (!Number.isFinite(minIndent) || minIndent === 0) return text;
+  return lines.map(l => l.slice(minIndent)).join('\n');
+}
+
+/**
+ * Read and parse `<viewsDir>/<serviceName>/views.yaml` if it exists.
+ * Returns a plain object mapping view name -> view body, or null if no
+ * fragment is present. Throws on parse errors so the generate run fails
+ * loudly rather than silently dropping views.
+ * @param {string} viewsDir - root views directory
+ * @param {string} serviceName - service folder name (snake_case)
+ * @returns {Object|null}
+ */
+export function loadServiceViews(viewsDir, serviceName) {
+  if (!viewsDir) return null;
+  const viewsFile = path.join(viewsDir, serviceName, 'views.yaml');
+  if (!fs.existsSync(viewsFile)) return null;
+  const raw = fs.readFileSync(viewsFile, 'utf-8');
+  const dedented = dedentYamlFragment(raw);
+  const parsed = yaml.load(dedented);
+  if (parsed === null || parsed === undefined) return null;
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`views fragment ${viewsFile} must parse to a YAML mapping at the top level`);
+  }
+  return parsed;
+}
+
+/**
+ * Splice view entries into a service spec's `components.x-stackQL-resources`
+ * map. Existing API-derived entries always win on key collision so a view
+ * cannot silently overwrite a real resource; collisions are reported via
+ * the supplied logger. If an existing entry is deep-equal to the incoming
+ * view body, treat as an idempotent re-run and skip silently.
+ *
+ * Mutates `spec` in place. Returns counts for logging.
+ *
+ * @param {Object} spec - service spec (mutated)
+ * @param {Object} views - parsed view map (name -> body)
+ * @param {Object} log - logger with .info/.warn methods
+ * @param {string} serviceName - for log messages
+ * @returns {{ merged: number, skippedIdempotent: number, collisions: string[] }}
+ */
+export function mergeViewsIntoSpec(spec, views, log, serviceName) {
+  const result = { merged: 0, skippedIdempotent: 0, collisions: [] };
+  if (!views || typeof views !== 'object') return result;
+  if (!spec.components) spec.components = {};
+  if (!spec.components['x-stackQL-resources']) spec.components['x-stackQL-resources'] = {};
+  const target = spec.components['x-stackQL-resources'];
+
+  for (const [viewName, viewBody] of Object.entries(views)) {
+    if (Object.prototype.hasOwnProperty.call(target, viewName)) {
+      const existing = target[viewName];
+      if (deepEqual(existing, viewBody)) {
+        result.skippedIdempotent++;
+        continue;
+      }
+      result.collisions.push(viewName);
+      log.warn(`⚠️ View '${viewName}' collides with existing resource in ${serviceName}; keeping the existing entry`);
+      continue;
+    }
+    target[viewName] = viewBody;
+    result.merged++;
+  }
+  return result;
+}
+
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (a === null || b === null) return a === b;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  const ak = Object.keys(a);
+  const bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (!deepEqual(a[k], b[k])) return false;
+  }
+  return true;
+}
+
+/**
  * Generate StackQL provider extensions
  * @param {Object} options - Options for generation
  * @returns {Promise<boolean>} - Success status
@@ -244,7 +352,9 @@ export async function generate(options) {
     serviceConfig = null,
     naiveReqBodyTranslate = false,
     updatePathParamNames = false,
-    skipFiles = []
+    skipFiles = [],
+    viewsDir = null,
+    verbose = false
   } = options;
 
   const version = 'v00.00.00000';
@@ -454,7 +564,27 @@ export async function generate(options) {
         spec.components = {};
       }
       spec.components['x-stackQL-resources'] = sortedResources;
-      
+
+      // Splice convenience views from <viewsDir>/<serviceName>/views.yaml,
+      // if any. Existing API-derived resources always win on key collision.
+      if (viewsDir) {
+        let serviceViews = null;
+        try {
+          serviceViews = loadServiceViews(viewsDir, serviceName);
+        } catch (err) {
+          logger.error(`❌ Failed to load views for ${serviceName}: ${err.message}`);
+          return false;
+        }
+        if (serviceViews) {
+          const mergeStats = mergeViewsIntoSpec(spec, serviceViews, logger, serviceName);
+          if (mergeStats.merged > 0 || mergeStats.collisions.length > 0 || (verbose && mergeStats.skippedIdempotent > 0)) {
+            logger.info(`📐 ${serviceName}: merged ${mergeStats.merged} view(s), ${mergeStats.skippedIdempotent} idempotent skip(s), ${mergeStats.collisions.length} collision(s)`);
+          }
+        } else if (verbose) {
+          logger.info(`📐 ${serviceName}: no views fragment under ${viewsDir}`);
+        }
+      }
+
       // Inject servers if provided
       if (servers) {
         try {

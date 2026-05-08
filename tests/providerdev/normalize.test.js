@@ -2,6 +2,7 @@ import {
   renameVariants,
   stripMisplacedSchemaKeywords,
   convertOpaqueObjectsToStrings,
+  liftPathItemParameters,
   walkAllOf,
   normalizeDocument,
 } from '../../src/providerdev/normalize.js';
@@ -205,6 +206,166 @@ describe('walkAllOf / flattenAllOf (pass 2)', () => {
     expect(doc).not.toHaveProperty('allOf');
     expect(doc.required.sort()).toEqual(['a', 'b', 'c']);
     expect(Object.keys(doc.properties).sort()).toEqual(['a', 'c']);
+  });
+});
+
+describe('liftPathItemParameters', () => {
+  function makeLiftStats() {
+    return { pathParamsLifted: 0 };
+  }
+
+  test('11. lifts path-item params onto an operation with empty parameters (Confluent Connect repro)', () => {
+    const doc = {
+      paths: {
+        '/connect/v1/environments/{environment_id}/clusters/{kafka_cluster_id}/connectors': {
+          parameters: [
+            { name: 'environment_id', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'kafka_cluster_id', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          get: {
+            operationId: 'listConnectv1Connectors',
+            parameters: [],
+          },
+        },
+      },
+    };
+    const stats = makeLiftStats();
+    liftPathItemParameters(doc, stats);
+    const path = doc.paths['/connect/v1/environments/{environment_id}/clusters/{kafka_cluster_id}/connectors'];
+    expect(path).not.toHaveProperty('parameters');
+    expect(path.get.parameters.map(p => p.name)).toEqual(['environment_id', 'kafka_cluster_id']);
+    expect(stats.pathParamsLifted).toBe(2);
+  });
+
+  test('12. operation-level parameter overrides path-item parameter on (name, in)', () => {
+    const doc = {
+      paths: {
+        '/things/{id}': {
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' }, description: 'from path-item' },
+          ],
+          get: {
+            parameters: [
+              { name: 'id', in: 'path', required: true, schema: { type: 'integer' }, description: 'from operation' },
+            ],
+          },
+        },
+      },
+    };
+    const stats = makeLiftStats();
+    liftPathItemParameters(doc, stats);
+    const params = doc.paths['/things/{id}'].get.parameters;
+    expect(params.length).toBe(1);
+    expect(params[0].description).toBe('from operation');
+    expect(params[0].schema.type).toBe('integer');
+    expect(stats.pathParamsLifted).toBe(0);
+  });
+
+  test('13. same name in different `in` locations are not deduped', () => {
+    const doc = {
+      paths: {
+        '/items/{id}': {
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          get: {
+            parameters: [
+              { name: 'id', in: 'query', schema: { type: 'string' } },
+            ],
+          },
+        },
+      },
+    };
+    const stats = makeLiftStats();
+    liftPathItemParameters(doc, stats);
+    const params = doc.paths['/items/{id}'].get.parameters;
+    expect(params.length).toBe(2);
+    expect(params.map(p => p.in).sort()).toEqual(['path', 'query']);
+    expect(stats.pathParamsLifted).toBe(1);
+  });
+
+  test('14. lifts onto every operation under the same path', () => {
+    const doc = {
+      paths: {
+        '/things/{id}': {
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          get: { parameters: [] },
+          delete: { parameters: [] },
+          patch: {},
+        },
+      },
+    };
+    const stats = makeLiftStats();
+    liftPathItemParameters(doc, stats);
+    const path = doc.paths['/things/{id}'];
+    expect(path.get.parameters[0].name).toBe('id');
+    expect(path.delete.parameters[0].name).toBe('id');
+    expect(path.patch.parameters[0].name).toBe('id');
+    expect(stats.pathParamsLifted).toBe(3);
+  });
+
+  test('15. resolves $ref params for dedup against op-level inline param', () => {
+    const doc = {
+      components: {
+        parameters: {
+          IdParam: { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+        },
+      },
+      paths: {
+        '/things/{id}': {
+          parameters: [
+            { $ref: '#/components/parameters/IdParam' },
+          ],
+          get: {
+            parameters: [
+              { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+            ],
+          },
+        },
+      },
+    };
+    const stats = makeLiftStats();
+    liftPathItemParameters(doc, stats);
+    const params = doc.paths['/things/{id}'].get.parameters;
+    expect(params.length).toBe(1);
+    expect(params[0].schema.type).toBe('integer');
+    expect(stats.pathParamsLifted).toBe(0);
+  });
+
+  test('16. leaves paths without path-item parameters untouched', () => {
+    const doc = {
+      paths: {
+        '/foo': {
+          get: { parameters: [{ name: 'q', in: 'query', schema: { type: 'string' } }] },
+        },
+      },
+    };
+    const stats = makeLiftStats();
+    liftPathItemParameters(doc, stats);
+    expect(doc.paths['/foo'].get.parameters).toEqual([
+      { name: 'q', in: 'query', schema: { type: 'string' } },
+    ]);
+    expect(stats.pathParamsLifted).toBe(0);
+  });
+
+  test('17. lifted parameter is a deep clone (mutating op param does not affect siblings)', () => {
+    const doc = {
+      paths: {
+        '/things/{id}': {
+          parameters: [
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          get: { parameters: [] },
+          delete: { parameters: [] },
+        },
+      },
+    };
+    liftPathItemParameters(doc, { pathParamsLifted: 0 });
+    const path = doc.paths['/things/{id}'];
+    path.get.parameters[0].schema.type = 'integer';
+    expect(path.delete.parameters[0].schema.type).toBe('string');
   });
 });
 

@@ -2,7 +2,7 @@
 // CLI entry for @stackql/provider-utils provider-dev commands.
 // Subcommands: split, normalize, analyze, generate
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { pathToFileURL } from 'url';
 import { split, normalize, analyze, generate } from '../src/providerdev/index.js';
@@ -46,6 +46,26 @@ function loadJsonString(value) {
 // expect an object/array, e.g. skipFiles, svcNameOverrides).
 function loadJsonValue(value) {
   return JSON.parse(loadJsonString(value));
+}
+
+// Resolve --views-dir. Explicit flag must point to an existing directory
+// (fail loudly if not — the caller opted in). With no flag, fall back to
+// ./views if it exists and is a directory; otherwise return null and the
+// generate run skips view merging entirely.
+function resolveViewsDir(arg, verbose) {
+  if (arg) {
+    const abs = resolve(arg);
+    if (!existsSync(abs) || !statSync(abs).isDirectory()) {
+      throw new Error(`--views-dir path does not exist or is not a directory: ${abs}`);
+    }
+    return abs;
+  }
+  const defaultPath = resolve('views');
+  if (existsSync(defaultPath) && statSync(defaultPath).isDirectory()) {
+    if (verbose) console.error(`Using default --views-dir: ${defaultPath}`);
+    return defaultPath;
+  }
+  return null;
 }
 
 async function loadDiscriminatorFn(filePath) {
@@ -135,6 +155,7 @@ async function runGenerate(args) {
   const providerConfigPath = getArg(args, '--provider-config');
   const serviceConfigPath = getArg(args, '--service-config');
   const skipFilesPath = getArg(args, '--skip-files');
+  const viewsDirArg = getArg(args, '--views-dir');
   const naiveReqBodyTranslate = hasFlag(args, '--naive-req-body-translate');
   const updatePathParamNames = hasFlag(args, '--update-path-param-names');
   const overwrite = hasFlag(args, '--overwrite');
@@ -147,7 +168,7 @@ async function runGenerate(args) {
   if (!providerId) missing.push('--provider-id (or --provider-name)');
   if (missing.length) {
     console.error(`Error: missing required arg(s): ${missing.join(', ')}`);
-    console.error('Usage: provider-dev-utils generate --input-dir DIR --output-dir DIR --config-path FILE --provider-id ID [--servers JSON|FILE.json] [--provider-config JSON|FILE.json] [--service-config JSON|FILE.json] [--skip-files JSON|FILE.json] [--naive-req-body-translate] [--update-path-param-names] [--overwrite] [--verbose]');
+    console.error('Usage: provider-dev-utils generate --input-dir DIR --output-dir DIR --config-path FILE --provider-id ID [--servers JSON|FILE.json] [--provider-config JSON|FILE.json] [--service-config JSON|FILE.json] [--skip-files JSON|FILE.json] [--views-dir DIR] [--naive-req-body-translate] [--update-path-param-names] [--overwrite] [--verbose]');
     process.exit(1);
   }
 
@@ -162,6 +183,12 @@ async function runGenerate(args) {
   if (providerConfigPath) opts.providerConfig = loadJsonString(providerConfigPath);
   if (serviceConfigPath) opts.serviceConfig = loadJsonString(serviceConfigPath);
   if (skipFilesPath) opts.skipFiles = loadJsonValue(skipFilesPath);
+
+  // --views-dir: explicit flag wins; otherwise default to ./views if it
+  // exists. If the explicit path is missing or not a directory, fail loudly
+  // — the caller asked for views.
+  const resolvedViewsDir = resolveViewsDir(viewsDirArg, verbose);
+  if (resolvedViewsDir) opts.viewsDir = resolvedViewsDir;
 
   const result = await generate(opts);
   console.log(JSON.stringify(result, null, 2));
@@ -180,6 +207,7 @@ function printUsage() {
   console.error('            (--provider-id ID | --provider-name NAME)');
   console.error('            [--servers JSON|FILE.json] [--provider-config JSON|FILE.json]');
   console.error('            [--service-config JSON|FILE.json] [--skip-files JSON|FILE.json]');
+  console.error('            [--views-dir DIR]   (default: ./views if it exists)');
   console.error('            [--naive-req-body-translate] [--update-path-param-names]');
   console.error('            [--overwrite] [--verbose]');
   console.error('');

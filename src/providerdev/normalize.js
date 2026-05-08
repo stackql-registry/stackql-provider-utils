@@ -13,6 +13,10 @@
 //   pass 1c - convertOpaqueObjectsToStrings: rewrite `type: object`
 //             schemas with no defined structure to `type: string` so
 //             stackql exposes them as JSON-blob columns
+//   pass 1d - liftPathItemParameters: merge path-item-level `parameters`
+//             into each operation's own `parameters` array so stackql's
+//             request builder (which only reads op-level params) binds
+//             path templates correctly
 //   pass 2  - walkAllOf / flattenAllOf: merge all allOf arrays into a
 //             single schema, resolving $refs with cycle protection
 
@@ -205,6 +209,65 @@ export function convertOpaqueObjectsToStrings(node, stats, path = '') {
   }
 }
 
+// pass 1d: OpenAPI 3 lets a path item declare `parameters` once at the
+// path-item level so they apply to every operation under that path. Some
+// downstream consumers (stackql's request builder included) only read
+// each operation's own `parameters`, which silently drops the shared
+// path-item params and leaves `{name}` templates unbound in the URL. Lift
+// the path-item-level entries onto every operation, deduplicated by
+// (name, in) with operation-level winning per the OpenAPI 3 spec.
+
+const PATH_ITEM_OPERATIONS = new Set([
+  'get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace',
+]);
+
+function paramDedupKey(param, root) {
+  if (!isPlainObject(param)) return null;
+  if (typeof param.name === 'string' && typeof param.in === 'string') {
+    return `${param.in}\0${param.name}`;
+  }
+  if (typeof param.$ref === 'string') {
+    const resolved = resolveRef(param.$ref, root);
+    if (isPlainObject(resolved) && typeof resolved.name === 'string' && typeof resolved.in === 'string') {
+      return `${resolved.in}\0${resolved.name}`;
+    }
+    return `$ref\0${param.$ref}`;
+  }
+  return null;
+}
+
+export function liftPathItemParameters(doc, stats) {
+  if (!isPlainObject(doc) || !isPlainObject(doc.paths)) return;
+  for (const pathObj of Object.values(doc.paths)) {
+    if (!isPlainObject(pathObj)) continue;
+    const pathParams = pathObj.parameters;
+    if (!Array.isArray(pathParams) || pathParams.length === 0) continue;
+
+    for (const [key, op] of Object.entries(pathObj)) {
+      if (!PATH_ITEM_OPERATIONS.has(key)) continue;
+      if (!isPlainObject(op)) continue;
+
+      const opParams = Array.isArray(op.parameters) ? op.parameters : [];
+      const seen = new Set();
+      for (const p of opParams) {
+        const k = paramDedupKey(p, doc);
+        if (k) seen.add(k);
+      }
+      const merged = [...opParams];
+      for (const p of pathParams) {
+        const k = paramDedupKey(p, doc);
+        if (k && seen.has(k)) continue;
+        if (k) seen.add(k);
+        merged.push(deepClone(p));
+        if (stats) stats.pathParamsLifted++;
+      }
+      op.parameters = merged;
+    }
+
+    delete pathObj.parameters;
+  }
+}
+
 // pass 2: collapse every allOf into a single merged schema.
 
 function flattenAllOf(allOfArr, root, seenRefs, stats) {
@@ -265,11 +328,13 @@ export function normalizeDocument(doc) {
     anyOfRenamed: 0,
     stripped: [],
     opaqueConverted: [],
+    pathParamsLifted: 0,
   };
   if (!doc || typeof doc !== 'object') return stats;
   renameVariants(doc, stats);
   stripMisplacedSchemaKeywords(doc, stats);
   convertOpaqueObjectsToStrings(doc, stats);
+  liftPathItemParameters(doc, stats);
   walkAllOf(doc, doc, new Set(), stats);
   return stats;
 }
@@ -289,10 +354,11 @@ function processFile(filePath, verbose) {
     stats.oneOfRenamed > 0 ||
     stats.anyOfRenamed > 0 ||
     stats.stripped.length > 0 ||
-    stats.opaqueConverted.length > 0;
+    stats.opaqueConverted.length > 0 ||
+    stats.pathParamsLifted > 0;
   if (verbose || touched) {
     console.log(
-      `${filePath}: flattened ${stats.allOfFlattened} allOf, renamed ${stats.oneOfRenamed} oneOf / ${stats.anyOfRenamed} anyOf; stripped ${stats.stripped.length} misplaced keyword(s); converted ${stats.opaqueConverted.length} opaque object(s) to string`
+      `${filePath}: flattened ${stats.allOfFlattened} allOf, renamed ${stats.oneOfRenamed} oneOf / ${stats.anyOfRenamed} anyOf; stripped ${stats.stripped.length} misplaced keyword(s); converted ${stats.opaqueConverted.length} opaque object(s) to string; lifted ${stats.pathParamsLifted} path-item parameter(s) onto operations`
     );
     if (verbose && stats.stripped.length > 0) {
       for (const s of stats.stripped) console.log(`  - strip: ${s}`);
@@ -333,6 +399,7 @@ export async function normalize({ apiDir, verbose = false } = {}) {
     anyOfRenamed: 0,
     stripped: [],
     opaqueConverted: [],
+    pathParamsLifted: 0,
     filesProcessed: 0,
   };
 
@@ -352,6 +419,7 @@ export async function normalize({ apiDir, verbose = false } = {}) {
     aggregate.anyOfRenamed += s.anyOfRenamed;
     aggregate.stripped.push(...s.stripped);
     aggregate.opaqueConverted.push(...s.opaqueConverted);
+    aggregate.pathParamsLifted += s.pathParamsLifted;
   }
   console.log(`Done. Processed ${aggregate.filesProcessed} file(s).`);
   return aggregate;

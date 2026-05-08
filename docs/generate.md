@@ -26,6 +26,7 @@ async function generate(options) {
 | `naiveReqBodyTranslate` | boolean | No | When `true`, adds `config.requestBodyTranslate.algorithm: naive` to every method with a request body (POST, PUT, PATCH). Also causes doc generation to omit the `data__` prefix on insert/update/replace fields. (default: false) |
 | `updatePathParamNames` | boolean | No | When `true`, converts all path parameter names to snake_case (e.g. `projectId` → `project_id`) as a preprocessing step before `x-stackQL-resources` is generated. See [Path Parameter Name Normalisation](#path-parameter-name-normalisation). (default: false) |
 | `skipFiles` | Array\<string\> | No | List of files to skip during generation |
+| `viewsDir` | string | No | Root directory for convenience-view fragments. Each `<viewsDir>/<service>/views.yaml` is spliced into the matching service's `components.x-stackQL-resources`. See [Convenience Views](#convenience-views). The CLI defaults to `./views` if it exists. |
 | `overwrite` | boolean | No | Whether to overwrite existing files (default: false) |
 | `verbose` | boolean | No | Whether to output detailed logs (default: false) |
 
@@ -216,6 +217,50 @@ If any of these fields are empty for an operation, `generate` logs an error mess
 Only the missing fields are listed. If all three are missing the message names all three; if only one is missing only that one is named.
 
 To resolve these errors, open the mapping CSV and fill in the missing values for the reported operations, then re-run `generate`.
+
+## Convenience Views
+
+Provider authors often want to ship "convenience views" alongside the API-derived resources - flattened, parameterised SELECT shapes that hide `JSON_EXTRACT` / `->>` plumbing from end users. `generate` picks these up from a `views/` tree on disk and splices them into each service spec's `components.x-stackQL-resources` map.
+
+### Directory layout
+
+```
+views/
+  managed_kafka_clusters/
+    views.yaml
+  iam/
+    views.yaml
+```
+
+Each subdirectory is named to match the generated `services/<service>.yaml` (the snake_cased base of the source filename). `views.yaml` is a YAML fragment whose top-level keys are view names. The fragment is conventionally indented at 4 spaces, since it is intended to be spliced as the body of `components.x-stackQL-resources`:
+
+```yaml
+    vw_clusters:
+      name: vw_clusters
+      id: confluent.managed_kafka_clusters.vw_clusters
+      config:
+        views:
+          select:
+            predicate: sqlDialect == "sqlite3"
+            ddl: |-
+              SELECT id, JSON_EXTRACT(spec, '$.display_name') AS display_name
+              FROM confluent.managed_kafka_clusters.clusters
+              WHERE environment = '{{ environment }}'
+```
+
+`generate` dedents the fragment automatically (using the smallest non-blank leading-space count), so a flush-left fragment also parses.
+
+### Discovery
+
+- `--views-dir <path>` CLI flag (or `viewsDir` option), if supplied, takes precedence and must point to an existing directory.
+- Otherwise the CLI falls back to `./views` if it exists.
+- If neither resolves, no views are merged.
+
+### Merge rules
+
+- Existing API-derived entries always win on key collision; collisions are reported via the logger and the view for that key is skipped, so a view can never silently overwrite a real resource.
+- If an existing entry is deep-equal to the incoming view body, it's treated as an idempotent re-run and skipped silently.
+- Otherwise the view body is added as a sibling under `components.x-stackQL-resources` and persisted to the written service spec.
 
 ## Output Structure
 
