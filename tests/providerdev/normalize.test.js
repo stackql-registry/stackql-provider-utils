@@ -3,6 +3,8 @@ import {
   stripMisplacedSchemaKeywords,
   convertOpaqueObjectsToStrings,
   liftPathItemParameters,
+  stripNonRootServers,
+  wrapBareArrayResponses,
   walkAllOf,
   normalizeDocument,
 } from '../../src/providerdev/normalize.js';
@@ -366,6 +368,394 @@ describe('liftPathItemParameters', () => {
     const path = doc.paths['/things/{id}'];
     path.get.parameters[0].schema.type = 'integer';
     expect(path.delete.parameters[0].schema.type).toBe('string');
+  });
+});
+
+describe('stripNonRootServers', () => {
+  function makeServersStats() {
+    return { serversStripped: 0 };
+  }
+
+  test('18. removes path-item-level servers (Confluent Kafka REST repro)', () => {
+    const doc = {
+      servers: [{ url: 'https://api.confluent.cloud' }],
+      paths: {
+        '/kafka/v3/clusters/{cluster_id}/topics': {
+          servers: [{ url: 'https://pkc-00000.region.provider.confluent.cloud' }],
+          get: { operationId: 'listKafkaTopics' },
+        },
+      },
+    };
+    const stats = makeServersStats();
+    stripNonRootServers(doc, stats);
+    expect(doc.paths['/kafka/v3/clusters/{cluster_id}/topics']).not.toHaveProperty('servers');
+    expect(doc.servers).toEqual([{ url: 'https://api.confluent.cloud' }]);
+    expect(stats.serversStripped).toBe(1);
+  });
+
+  test('19. removes operation-level servers across all HTTP verbs', () => {
+    const doc = {
+      paths: {
+        '/x': {
+          get: { servers: [{ url: 'https://a' }] },
+          post: { servers: [{ url: 'https://b' }] },
+          delete: { servers: [{ url: 'https://c' }] },
+          patch: {},
+        },
+      },
+    };
+    const stats = makeServersStats();
+    stripNonRootServers(doc, stats);
+    expect(doc.paths['/x'].get).not.toHaveProperty('servers');
+    expect(doc.paths['/x'].post).not.toHaveProperty('servers');
+    expect(doc.paths['/x'].delete).not.toHaveProperty('servers');
+    expect(stats.serversStripped).toBe(3);
+  });
+
+  test('20. strips both path-item and per-op servers in the same path', () => {
+    const doc = {
+      paths: {
+        '/y': {
+          servers: [{ url: 'https://path-level' }],
+          get: { servers: [{ url: 'https://op-level' }] },
+        },
+      },
+    };
+    const stats = makeServersStats();
+    stripNonRootServers(doc, stats);
+    expect(doc.paths['/y']).not.toHaveProperty('servers');
+    expect(doc.paths['/y'].get).not.toHaveProperty('servers');
+    expect(stats.serversStripped).toBe(2);
+  });
+
+  test('21. leaves the document-level servers array untouched', () => {
+    const rootServers = [{ url: 'https://api.example.com', description: 'prod' }];
+    const doc = {
+      servers: rootServers,
+      paths: {
+        '/foo': {
+          servers: [{ url: 'https://nope' }],
+          get: {},
+        },
+      },
+    };
+    stripNonRootServers(doc, makeServersStats());
+    expect(doc.servers).toBe(rootServers);
+    expect(doc.servers).toEqual([{ url: 'https://api.example.com', description: 'prod' }]);
+  });
+
+  test('22. is a no-op on a doc with no path-item or operation servers', () => {
+    const doc = {
+      servers: [{ url: 'https://api.example.com' }],
+      paths: {
+        '/foo': { get: { operationId: 'getFoo' } },
+      },
+    };
+    const stats = makeServersStats();
+    stripNonRootServers(doc, stats);
+    expect(stats.serversStripped).toBe(0);
+    expect(doc.paths['/foo'].get).toEqual({ operationId: 'getFoo' });
+  });
+
+  test('23. ignores non-operation keys at the path-item level (parameters, summary, x-*)', () => {
+    const doc = {
+      paths: {
+        '/z': {
+          summary: 'a path',
+          parameters: [{ name: 'q', in: 'query' }],
+          'x-extension': { servers: [{ url: 'https://nested-extension' }] },
+          get: { servers: [{ url: 'https://op' }] },
+        },
+      },
+    };
+    const stats = makeServersStats();
+    stripNonRootServers(doc, stats);
+    expect(doc.paths['/z'].summary).toBe('a path');
+    expect(doc.paths['/z'].parameters).toEqual([{ name: 'q', in: 'query' }]);
+    expect(doc.paths['/z']['x-extension']).toEqual({ servers: [{ url: 'https://nested-extension' }] });
+    expect(doc.paths['/z'].get).not.toHaveProperty('servers');
+    expect(stats.serversStripped).toBe(1);
+  });
+
+  test('24. is idempotent on re-run', () => {
+    const doc = {
+      paths: {
+        '/x': {
+          servers: [{ url: 'https://a' }],
+          get: { servers: [{ url: 'https://b' }] },
+        },
+      },
+    };
+    const first = makeServersStats();
+    stripNonRootServers(doc, first);
+    expect(first.serversStripped).toBe(2);
+    const second = makeServersStats();
+    stripNonRootServers(doc, second);
+    expect(second.serversStripped).toBe(0);
+  });
+});
+
+describe('wrapBareArrayResponses', () => {
+  function makeWrapStats() {
+    return { bareArrayWrapped: 0 };
+  }
+  function captureWarnings() {
+    const warnings = [];
+    return { log: { warn: (m) => warnings.push(m) }, warnings };
+  }
+
+  test('25. scalar items: synthesises wrapper schema, rewrites response, marks op (Confluent listContexts repro)', () => {
+    const doc = {
+      paths: {
+        '/contexts': {
+          get: {
+            operationId: 'listContexts',
+            responses: {
+              '200': {
+                description: 'ok',
+                content: {
+                  'application/json': {
+                    schema: { type: 'array', items: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const stats = makeWrapStats();
+    wrapBareArrayResponses(doc, {}, stats);
+
+    const op = doc.paths['/contexts'].get;
+    expect(op.responses['200'].content['application/json'].schema)
+      .toEqual({ $ref: '#/components/schemas/ListContextsResponse' });
+    expect(op['x-stackql-bare-array-wrap']).toEqual({
+      wrapperKey: 'contexts',
+      wrapperName: 'ListContextsResponse',
+      mediaType: 'application/json',
+      scalar: true,
+      columnName: 'context',
+    });
+
+    const wrapper = doc.components.schemas.ListContextsResponse;
+    expect(wrapper.type).toBe('object');
+    expect(wrapper.properties.contexts.type).toBe('array');
+    expect(wrapper.properties.contexts.items.type).toBe('object');
+    expect(wrapper.properties.contexts.items.properties.context.type).toBe('string');
+    expect(stats.bareArrayWrapped).toBe(1);
+  });
+
+  test('26. object items: wrapper key with original items schema preserved', () => {
+    const itemsSchema = {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        kind: { type: 'string' },
+      },
+    };
+    const doc = {
+      paths: {
+        '/connectors/{name}/tasks': {
+          get: {
+            operationId: 'listConnectorTasks',
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: { type: 'array', items: itemsSchema },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const stats = makeWrapStats();
+    wrapBareArrayResponses(doc, {}, stats);
+
+    const wrap = doc.paths['/connectors/{name}/tasks'].get['x-stackql-bare-array-wrap'];
+    expect(wrap).toEqual({
+      wrapperKey: 'connector_tasks',
+      wrapperName: 'ListConnectorTasksResponse',
+      mediaType: 'application/json',
+      scalar: false,
+    });
+    const wrapper = doc.components.schemas.ListConnectorTasksResponse;
+    expect(wrapper.properties.connector_tasks.items).toEqual(itemsSchema);
+    expect(stats.bareArrayWrapped).toBe(1);
+  });
+
+  test('27. integer scalar items: column type matches the underlying scalar type', () => {
+    const doc = {
+      paths: {
+        '/ids': {
+          get: {
+            operationId: 'listIds',
+            responses: {
+              '200': { content: { 'application/json': { schema: { type: 'array', items: { type: 'integer' } } } } },
+            },
+          },
+        },
+      },
+    };
+    wrapBareArrayResponses(doc, {}, makeWrapStats());
+    const wrapper = doc.components.schemas.ListIdsResponse;
+    expect(wrapper.properties.ids.items.properties.id.type).toBe('integer');
+  });
+
+  test('28. response schema is itself a $ref to a top-level array component: still wraps', () => {
+    const doc = {
+      components: {
+        schemas: {
+          StringList: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      paths: {
+        '/things': {
+          get: {
+            operationId: 'listThings',
+            responses: {
+              '200': { content: { 'application/json': { schema: { $ref: '#/components/schemas/StringList' } } } },
+            },
+          },
+        },
+      },
+    };
+    wrapBareArrayResponses(doc, {}, makeWrapStats());
+    const op = doc.paths['/things'].get;
+    expect(op.responses['200'].content['application/json'].schema)
+      .toEqual({ $ref: '#/components/schemas/ListThingsResponse' });
+    // Original component schema is left in place — other ops may reference it.
+    expect(doc.components.schemas.StringList).toEqual({ type: 'array', items: { type: 'string' } });
+  });
+
+  test('29. operationId-only verb falls back to wrapperKey "items" and column "item"', () => {
+    const doc = {
+      paths: {
+        '/x': {
+          get: {
+            operationId: 'list',
+            responses: {
+              '200': { content: { 'application/json': { schema: { type: 'array', items: { type: 'string' } } } } },
+            },
+          },
+        },
+      },
+    };
+    wrapBareArrayResponses(doc, {}, makeWrapStats());
+    const wrap = doc.paths['/x'].get['x-stackql-bare-array-wrap'];
+    expect(wrap.wrapperKey).toBe('items');
+    expect(wrap.columnName).toBe('item');
+  });
+
+  test('30. override file wins for both wrapperKey and columnName', () => {
+    const doc = {
+      paths: {
+        '/contexts': {
+          get: {
+            operationId: 'listContexts',
+            responses: {
+              '200': { content: { 'application/json': { schema: { type: 'array', items: { type: 'string' } } } } },
+            },
+          },
+        },
+      },
+    };
+    const overrides = { listContexts: { wrapperKey: 'rows', columnName: 'name' } };
+    wrapBareArrayResponses(doc, { bareArrayOverrides: overrides }, makeWrapStats());
+    const wrap = doc.paths['/contexts'].get['x-stackql-bare-array-wrap'];
+    expect(wrap.wrapperKey).toBe('rows');
+    expect(wrap.columnName).toBe('name');
+    const wrapper = doc.components.schemas.ListContextsResponse;
+    expect(wrapper.properties.rows.items.properties.name.type).toBe('string');
+  });
+
+  test('31. is idempotent on re-run (existing marker short-circuits)', () => {
+    const doc = {
+      paths: {
+        '/contexts': {
+          get: {
+            operationId: 'listContexts',
+            responses: {
+              '200': { content: { 'application/json': { schema: { type: 'array', items: { type: 'string' } } } } },
+            },
+          },
+        },
+      },
+    };
+    const first = makeWrapStats();
+    wrapBareArrayResponses(doc, {}, first);
+    expect(first.bareArrayWrapped).toBe(1);
+    const second = makeWrapStats();
+    wrapBareArrayResponses(doc, {}, second);
+    expect(second.bareArrayWrapped).toBe(0);
+  });
+
+  test('32. wrapper schema name collision with different body is reported and skipped', () => {
+    const doc = {
+      components: {
+        schemas: {
+          ListContextsResponse: { type: 'object', description: 'pre-existing, not the same' },
+        },
+      },
+      paths: {
+        '/contexts': {
+          get: {
+            operationId: 'listContexts',
+            responses: {
+              '200': { content: { 'application/json': { schema: { type: 'array', items: { type: 'string' } } } } },
+            },
+          },
+        },
+      },
+    };
+    const { log, warnings } = captureWarnings();
+    wrapBareArrayResponses(doc, { log }, makeWrapStats());
+    const op = doc.paths['/contexts'].get;
+    expect(op).not.toHaveProperty('x-stackql-bare-array-wrap');
+    expect(op.responses['200'].content['application/json'].schema).toEqual({ type: 'array', items: { type: 'string' } });
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toMatch(/already in use/);
+  });
+
+  test('33. operations whose response is an object (not array) are untouched', () => {
+    const doc = {
+      paths: {
+        '/foo': {
+          get: {
+            operationId: 'getFoo',
+            responses: {
+              '200': { content: { 'application/json': { schema: { type: 'object', properties: { id: { type: 'string' } } } } } },
+            },
+          },
+        },
+      },
+    };
+    const stats = makeWrapStats();
+    wrapBareArrayResponses(doc, {}, stats);
+    expect(stats.bareArrayWrapped).toBe(0);
+    expect(doc.paths['/foo'].get).not.toHaveProperty('x-stackql-bare-array-wrap');
+  });
+
+  test('34. bare-array response with no operationId is skipped with a warning', () => {
+    const doc = {
+      paths: {
+        '/x': {
+          get: {
+            responses: {
+              '200': { content: { 'application/json': { schema: { type: 'array', items: { type: 'string' } } } } },
+            },
+          },
+        },
+      },
+    };
+    const { log, warnings } = captureWarnings();
+    const stats = makeWrapStats();
+    wrapBareArrayResponses(doc, { log }, stats);
+    expect(stats.bareArrayWrapped).toBe(0);
+    expect(warnings[0]).toMatch(/no operationId/);
   });
 });
 

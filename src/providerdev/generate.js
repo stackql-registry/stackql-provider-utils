@@ -337,6 +337,65 @@ function deepEqual(a, b) {
 }
 
 /**
+ * Build the Go-template transform.body string for a bare-array response
+ * wrap. Two flavours: scalar items get a per-item wrap into a
+ * single-column row; object items just rename the outer array under
+ * the wrapper key.
+ * @param {Object} wrap - { wrapperKey, scalar, columnName? }
+ * @returns {string} - Go template body
+ */
+function buildBareArrayTransformBody(wrap) {
+  const { wrapperKey, scalar, columnName } = wrap;
+  if (scalar) {
+    return [
+      `{{- $wrapped := printf "{\\"items\\":%s}" . -}}`,
+      `{{- $parsed := jsonMapFromString $wrapped -}}`,
+      `{{- $items := index $parsed "items" -}}`,
+      `{"${wrapperKey}":[{{- range $i, $v := $items -}}{{- if $i -}},{{- end -}}{"${columnName}":"{{- $v -}}"}{{- end -}}]}`,
+    ].join('\n');
+  }
+  return [
+    `{{- $wrapped := printf "{\\"${wrapperKey}\\":%s}" . -}}`,
+    `{{- $wrapped -}}`,
+  ].join('\n');
+}
+
+/**
+ * Apply bare-array-wrap follow-through: when the OpenAPI operation has
+ * the `x-stackql-bare-array-wrap` marker (set by normalize's pass 1f),
+ * attach `objectKey` and a Go-template `transform` to the resource
+ * method, and strip the marker from the operation so it does not
+ * persist in the written spec.
+ * @param {Object} methodEntry - resource method entry being built
+ * @param {Object} operation - the OpenAPI operation
+ */
+export function applyBareArrayWrap(methodEntry, operation) {
+  if (!operation || typeof operation !== 'object') return;
+  const wrap = operation['x-stackql-bare-array-wrap'];
+  if (!wrap || typeof wrap !== 'object') return;
+
+  methodEntry.response = methodEntry.response || {};
+  methodEntry.response.objectKey = `$.${wrap.wrapperKey}`;
+  // overrideMediaType + schema_override tell stackql's response pipeline
+  // that the runtime payload should be re-typed against the synthesised
+  // wrapper schema. Without these the transform never fires and the row
+  // projector hits the original bare-array payload.
+  const mediaType = wrap.mediaType || methodEntry.response.mediaType || 'application/json';
+  methodEntry.response.overrideMediaType = mediaType;
+  if (wrap.wrapperName) {
+    methodEntry.response.schema_override = {
+      $ref: `#/components/schemas/${wrap.wrapperName}`,
+    };
+  }
+  methodEntry.response.transform = {
+    body: buildBareArrayTransformBody(wrap),
+    type: 'golang_template_text_v0.3.0',
+  };
+
+  delete operation['x-stackql-bare-array-wrap'];
+}
+
+/**
  * Generate StackQL provider extensions
  * @param {Object} options - Options for generation
  * @returns {Promise<boolean>} - Success status
@@ -542,6 +601,12 @@ export async function generate(options) {
           if (entry.stackql_object_key && verb === 'get') {
             methodEntry.response.objectKey = entry.stackql_object_key;
           }
+
+          // If normalize's wrapBareArrayResponses marked this operation,
+          // attach the matching transform.body and objectKey here. The
+          // wrap is authoritative — it overrides any CSV-supplied
+          // objectKey because the wrapper schema dictates the shape.
+          applyBareArrayWrap(methodEntry, operation);
 
           resources[resource].methods[method] = methodEntry;
           if (sqlverb && sqlverb === 'exec') {

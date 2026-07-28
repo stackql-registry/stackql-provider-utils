@@ -178,8 +178,8 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
     }
 
     for (const thisMethod of resourceData.sqlVerbs[sqlVerb]) {
-        const {path, httpVerb, mediaType, openAPIDocKey, objectKey, methodName, methodConfig} = getHttpOperationForSqlVerb(thisMethod.$ref, resourceData);
-        const {respProps, respDescription, opDescription, opSummary, requestBody} = getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey);
+        const {path, httpVerb, mediaType, openAPIDocKey, objectKey, schemaOverride, methodName, methodConfig} = getHttpOperationForSqlVerb(thisMethod.$ref, resourceData);
+        const {respProps, respDescription, opDescription, opSummary, requestBody} = getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey, schemaOverride);
         const {requiredParams, optionalParams} = getHttpOperationParams(dereferencedAPI, path, httpVerb);
 
         // Initialize the method object with description and params
@@ -276,9 +276,16 @@ function formatProperties(respProps) {
             if (typeof fieldValue != 'string') {
                 continue;
             } else {
-                // Specifically wrap pattern fields in code tags
+                // Specifically wrap pattern fields in code tags.
+                // Entity-encode regex metachars [ ] { } so MDX does not parse
+                // shortcut reference links like [.][0-9] inside <code>.
                 if (fieldName === 'pattern') {
-                    additionalDescriptionPaths.push(`${fieldName}: <code>${String(fieldValue)}</code>`);
+                    const escapedPattern = String(fieldValue)
+                        .replace(/\[/g, '&#91;')
+                        .replace(/\]/g, '&#93;')
+                        .replace(/\{/g, '&#123;')
+                        .replace(/\}/g, '&#125;');
+                    additionalDescriptionPaths.push(`${fieldName}: <code>${escapedPattern}</code>`);
                 } else {
                     additionalDescriptionPaths.push(`${fieldName}: ${String(fieldValue)}`);
                 }
@@ -377,12 +384,33 @@ function getHttpOperationForSqlVerb(sqlVerbRef, resourceData){
         mediaType: methodObj.response.mediaType,
         openAPIDocKey: methodObj.response.openAPIDocKey,
         objectKey: methodObj.response.objectKey || false,
+        schemaOverride: methodObj.response.schema_override || false,
         methodName,
         methodConfig: methodObj.config || null
     }
 }
 
-function getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey) {
+// Providers whose responses are reshaped by a response transform document
+// the row shape via response.schema_override (usually a $ref into
+// components.schemas) rather than the operation's declared response
+// content (e.g. the aws provider's XML-walker and scalar-explode methods,
+// where objectKey points into the post-transform envelope). Resolve the
+// override against the dereferenced API doc; inline schema objects pass
+// through as-is.
+function resolveSchemaOverride(dereferencedAPI, schemaOverride) {
+    if (!schemaOverride) return null;
+    const ref = typeof schemaOverride === 'string' ? schemaOverride : schemaOverride.$ref;
+    if (!ref) {
+        // inline schema object
+        return typeof schemaOverride === 'object' ? schemaOverride : null;
+    }
+    if (typeof ref !== 'string' || !ref.startsWith('#/components/schemas/')) return null;
+    const name = ref.split('/').pop();
+    return (dereferencedAPI && dereferencedAPI.components && dereferencedAPI.components.schemas &&
+        dereferencedAPI.components.schemas[name]) || null;
+}
+
+function getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey, schemaOverride = false) {
     console.log(`Getting response for ${path}/${httpVerb}...`);
     
     // Check if the path exists in the dereferencedAPI
@@ -479,8 +507,26 @@ function getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAP
         }
     }
 
+    // response.schema_override wins over the operation's declared response
+    // content: the wire response is reshaped by a response transform and
+    // the override describes the post-transform row envelope that
+    // objectKey points into. Without this, objectKey resolves against the
+    // raw response schema, finds nothing, and the method documents zero
+    // fields (and docgen falls back to `SELECT *` examples).
+    const overrideSchema = resolveSchemaOverride(dereferencedAPI, schemaOverride);
+    if (overrideSchema) {
+        const { respProps, respDescription } = getHttpRespBody(overrideSchema, objectKey);
+        return {
+            respProps,
+            respDescription,
+            opDescription,
+            opSummary,
+            requestBody
+        };
+    }
+
     // Rest of the function remains unchanged
-    if (!dereferencedAPI.paths[path][httpVerb].responses || 
+    if (!dereferencedAPI.paths[path][httpVerb].responses ||
         !dereferencedAPI.paths[path][httpVerb].responses[openAPIDocKey]) {
         console.warn(`Response '${openAPIDocKey}' not found for ${path}/${httpVerb}`);
         return {
@@ -519,6 +565,17 @@ function getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAP
     };
 }
 
+function walkObjectKey(schema, dottedKey) {
+    let node = schema;
+    for (const seg of dottedKey.split('.')) {
+        if (!node || typeof node !== 'object') return null;
+        if (node.type === 'array' && node.items) node = node.items;
+        if (!node.properties || !node.properties[seg]) return null;
+        node = node.properties[seg];
+    }
+    return node;
+}
+
 function getHttpRespBody(schema, objectKey) {
 
     if (schema.type === 'array') {
@@ -540,9 +597,9 @@ function getHttpRespBody(schema, objectKey) {
                 const respProps = schema?.properties?.items?.additionalProperties?.properties?.[complexObjectKey]?.items?.properties ?? {};
 
                 // Safe access to respDescription with fallbacks
-                const respDescription = 
-                    schema?.properties?.items?.additionalProperties?.properties?.[complexObjectKey]?.items?.description ?? 
-                    schema?.properties?.items?.description ?? 
+                const respDescription =
+                    schema?.properties?.items?.additionalProperties?.properties?.[complexObjectKey]?.items?.description ??
+                    schema?.properties?.items?.description ??
                     '';
 
                 // console.info(respProps);
@@ -553,21 +610,19 @@ function getHttpRespBody(schema, objectKey) {
                 };
 
             } else {
-                // simple object key
+                // simple object key (may be a dotted JSON path, e.g. $.result.reports)
                 console.log(`Simple Object Key : ${objectKey}`);
                 const simpleObjectKey = objectKey.replace('$.', '');
 
+                const leaf = walkObjectKey(schema, simpleObjectKey);
+                let respProps = {};
+                let respDescription = schema?.description ?? '';
+                if (leaf) {
+                    const rowSchema = (leaf.type === 'array' && leaf.items) ? leaf.items : leaf;
+                    respProps = rowSchema.properties || {};
+                    respDescription = rowSchema.description ?? respDescription;
+                }
 
-                const respProps = (schema?.properties?.[simpleObjectKey]?.items?.properties) ?? 
-                                (schema?.properties?.[simpleObjectKey]?.properties) ?? 
-                                {};
-
-                const respDescription = (schema?.properties?.[simpleObjectKey]?.items?.description) ?? 
-                                        (schema?.description) ?? 
-                                        '';
-
-                // console.info(respProps);
-                // console.log(respDescription);
                 return {
                     respProps: respProps,
                     respDescription: respDescription,

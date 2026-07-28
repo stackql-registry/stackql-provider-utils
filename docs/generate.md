@@ -262,6 +262,27 @@ Each subdirectory is named to match the generated `services/<service>.yaml` (the
 - If an existing entry is deep-equal to the incoming view body, it's treated as an idempotent re-run and skipped silently.
 - Otherwise the view body is added as a sibling under `components.x-stackQL-resources` and persisted to the written service spec.
 
+## Bare-array Response Wrap (pairs with `normalize` pass 6)
+
+When `normalize` rewrites an operation with a bare-array 2xx response, it leaves an `x-stackql-bare-array-wrap` extension on the operation. `generate` consumes this marker and, on the matching resource method's `response` block:
+
+- sets `objectKey` to `$.<wrapperKey>` (overrides any manifest-supplied `objectKey` for this method since the wrapper schema dictates the shape),
+- sets `overrideMediaType` to the operation's response media type (defaults to `application/json`),
+- sets `schema_override` to `{ $ref: '#/components/schemas/<WrapperName>' }` pointing at the synthesised wrapper schema,
+- attaches `transform.body` (a Go template) and `transform.type: golang_template_text_v0.3.0` as siblings of `objectKey` inside `response`,
+- removes the marker from the operation so it does not persist in the written spec.
+
+All four keys (`objectKey`, `overrideMediaType`, `schema_override`, `transform`) live inside `response` as siblings. The `overrideMediaType` + `schema_override` pair is what tells stackql's response pipeline to fire the transform at runtime; without them stackql resolves the spec-side wrapper schema correctly but never re-types the runtime payload, the JSONPath evaluator hits the bare-array, and the query fails with `expected number but got <wrapperKey> (string)`.
+
+Two transform-body flavours are produced:
+
+| Items shape | Transform body |
+|---|---|
+| Scalar (`string` / `integer` / `number` / `boolean`) | Per-item wrap into a single-column row using `jsonMapFromString`, e.g. `{"contexts":[{"context":"default"},...]}`. |
+| Object | Outer rename only: `{"connector_tasks": [...]}`. |
+
+The naming heuristics (wrapper key / column name) are decided in `normalize`. If you need to override them, pass `--bare-array-overrides` to `normalize` rather than editing the generated spec.
+
 ## Output Structure
 
 The generate operation creates the following directory structure:

@@ -117,12 +117,17 @@ async function runSplit(args) {
 async function runNormalize(args) {
   const apiDir = getArg(args, '--api-dir');
   const verbose = hasFlag(args, '--verbose');
+  const bareArrayOverridesPath = getArg(args, '--bare-array-overrides');
   if (!apiDir) {
     console.error('Error: --api-dir is required');
-    console.error('Usage: provider-dev-utils normalize --api-dir DIR [--verbose]');
+    console.error('Usage: provider-dev-utils normalize --api-dir DIR [--verbose] [--bare-array-overrides JSON|FILE.json]');
     process.exit(1);
   }
-  const stats = await normalize({ apiDir, verbose });
+  const opts = { apiDir, verbose };
+  if (bareArrayOverridesPath) {
+    opts.bareArrayOverrides = loadJsonValue(bareArrayOverridesPath);
+  }
+  const stats = await normalize(opts);
   console.log(JSON.stringify(stats, null, 2));
 }
 
@@ -201,7 +206,7 @@ function printUsage() {
   console.error('  split     --api-doc FILE --provider-name NAME --output-dir DIR --svc-discriminator {tag|path|function}');
   console.error('            [--svc-discriminator-fn FILE.{js,mjs}]   (required when --svc-discriminator=function)');
   console.error('            [--overwrite] [--verbose] [--svc-name-overrides JSON|FILE.json]');
-  console.error('  normalize --api-dir DIR [--verbose]');
+  console.error('  normalize --api-dir DIR [--verbose] [--bare-array-overrides JSON|FILE.json]');
   console.error('  analyze   --input-dir DIR --output-dir DIR [--verbose]');
   console.error('  generate  --input-dir DIR --output-dir DIR --config-path FILE');
   console.error('            (--provider-id ID | --provider-name NAME)');

@@ -147,6 +147,23 @@ The library provides a streamlined workflow for creating StackQL providers from 
 
 Contributions are welcome!
 
+### Running Tests
+
+Unit tests are written with [Jest](https://jestjs.io/) and live in the `tests/` directory. This package uses native ES modules, so the `test` script runs Jest under `node --experimental-vm-modules`.
+
+```bash
+npm ci
+npm test
+```
+
+To run a single test suite:
+
+```bash
+npm test -- tests/providerdev/normalize.test.js
+```
+
+Tests run automatically in CI via GitHub Actions (`.github/workflows/test.yml`) on pushes and pull requests to `main`. Publishing to npm is deliberately not automated - it is a manual step performed by a maintainer as it requires 2FA.
+
 ## License
 
 MIT
