@@ -142,8 +142,8 @@ function generateManifestPropsYaml(properties, indent, depth = 0, maxDepth = 4) 
     return content;
 }
 
-export function createInsertExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
-    const insertMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'insert');
+export function createInsertExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false, casing = null) {
+    const insertMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'insert', casing);
 
     // if there are no insert methods, return empty content
     if (Object.keys(insertMethods).length === 0) {

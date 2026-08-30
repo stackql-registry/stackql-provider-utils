@@ -3,10 +3,11 @@ import {
     getSqlMethodsWithOrderedFields,
     sanitizeHtml 
 } from '../helpers.js';
+import { wireHint } from '../casing.js';
 
 const mdCodeAnchor = "`";
 
-export function createParamsSection(resourceData, dereferencedAPI) {
+export function createParamsSection(resourceData, dereferencedAPI, casing = null) {
     let content = '\n\n## Parameters\n\n';
 
     content += 'Parameters can be passed in the `WHERE` clause of a query. ' +
@@ -15,7 +16,7 @@ export function createParamsSection(resourceData, dereferencedAPI) {
     // Get all methods at once
     const allMethodTypes = ['select', 'insert', 'update', 'replace', 'delete', 'exec'];
     const allMethods = allMethodTypes.flatMap(type => 
-        Object.values(getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, type))
+        Object.values(getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, type, casing))
     );
     
     // Collect all unique parameters in one pass
@@ -56,7 +57,7 @@ export function createParamsSection(resourceData, dereferencedAPI) {
 <tr id="parameter-${paramName}">
     <td><CopyableCode code="${paramName}" /></td>
     <td><code>${paramDetails.type || ''}</code></td>
-    <td>${sanitizeHtml(paramDetails.description) || ''}</td>
+    <td>${sanitizeHtml(paramDetails.description) || ''}${wireHint(paramDetails)}</td>
 </tr>`;
         }
     };

@@ -25,7 +25,7 @@ const getRequiredBodyParams = (methodDetails, accessType) => {
     }
 };
 
-export function createMethodsSection(resourceData, dereferencedAPI, succinct = false) {
+export function createMethodsSection(resourceData, dereferencedAPI, succinct = false, casing = null) {
     
     let content = `\n## Methods\n\n`;
 
@@ -44,12 +44,12 @@ export function createMethodsSection(resourceData, dereferencedAPI, succinct = f
 </thead>
 <tbody>`;
 
-    const selectMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select');
-    const insertMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'insert');
-    const updateMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'update');
-    const replaceMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'replace');
-    const deleteMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'delete');
-    const execMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'exec');
+    const selectMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select', casing);
+    const insertMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'insert', casing);
+    const updateMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'update', casing);
+    const replaceMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'replace', casing);
+    const deleteMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'delete', casing);
+    const execMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'exec', casing);
 
     // console.dir(selectMethods, { depth: null, colors: true });
 

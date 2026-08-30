@@ -23,6 +23,43 @@ async function generateDocs(options) {
 | `outputDir` | string | Yes | Directory for generated documentation |
 | `providerDataDir` | string | Yes | Directory containing provider header files |
 | `verbose` | boolean | No | Whether to output detailed logs (default: false) |
+| `snakeCaseAliases` | boolean \| object | No | Render identifiers as the engine's snake_case surface (default: false, see below) |
+
+## Snake Case Aliases
+
+Providers that set `config.snake_case_aliases: true` in `provider.yaml` present a snake_case SQL surface in the engine: `SELECT` / `DESCRIBE` columns are snake aliases of the camelCase or PascalCase wire properties, and for methods that declare `request.nativeCasing`, snake_case `WHERE` keys and `INSERT` / `UPDATE` columns resolve to the wire parameter and body attribute names. By default docgen renders wire names. Pass `snakeCaseAliases: true` (CLI: `--snake-case-aliases`) to render identifiers the way the engine presents them:
+
+- Response fields (fields table, `SELECT` column lists, `RETURNING` lists, view projections) display as `toSnake(name)` for top-level properties only. Nested object and array contents keep wire casing, as the engine does not alias inside JSON blobs.
+- For methods with `request.nativeCasing` set, path/query parameters and top-level request-body properties display as `toSnake(name)` in the methods table, the parameters section (including anchor ids) and the `WHERE` / `INSERT` / `UPDATE` / `DELETE` examples. Methods without `request.nativeCasing` keep wire names.
+- Server variables and `EXEC` variables always render as authored (wire names). A note to that effect is added to the lifecycle methods section.
+- A snake alias never replaces a real name of the same spelling; if a schema or parameter set already contains the snake spelling, the camelCase one keeps its wire name.
+- Renamed fields and parameters get a `(wire: <name>)` hint in their description cell so readers can map back to `SHOW METHODS` output and `EXEC` variables.
+
+### Selecting surfaces
+
+The three surfaces are independently switchable, because a provider can be correct on one and not another at a given point in time - the engine translates response columns, parameters and request-body keys through different mechanisms, and they do not necessarily land together. Documenting a surface the engine does not serve produces copy-paste examples that fail, so pass only what is true for the provider:
+
+| value | fields | params | body |
+| --- | --- | --- | --- |
+| `false` (default) | wire | wire | wire |
+| `true` | snake | snake | snake |
+| `{ params: true }` | wire | snake | wire |
+| `{ fields: true, params: true }` | snake | snake | wire |
+
+Omitted keys default to `false`. The boolean form is retained and equivalent to all three on.
+
+```javascript
+// a provider whose engine aliases parameters but not response columns
+await docgen.generateDocs({ ...opts, snakeCaseAliases: { params: true } });
+```
+
+```bash
+docgen-utils generate-docs ... --snake-case-aliases=params
+docgen-utils generate-docs ... --snake-case-aliases=fields,params
+docgen-utils generate-docs ... --snake-case-aliases          # every surface
+```
+
+The transform is a port of any-sdk `casing.ToSnake` (botocore `xform_name`): `totalCHC` -> `total_chc`, `VPCId` -> `vpc_id`, `ipAccessList` -> `ip_access_list`; names that already contain `_` are returned unchanged. The flag is the switch - it is not inferred from `provider.yaml`, although the CLI prints a hint when `provider.yaml` opts in and the flag is absent.
 
 ## Return Value
 

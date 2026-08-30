@@ -1,11 +1,23 @@
 // src/docgen/resource/view.js
 import { sanitizeHtml } from '../helpers.js';
+import { buildAliasMap } from '../casing.js';
 
-export function docView(resourceData) {
+export function docView(resourceData, casing = null) {
 
     let content = '';
 
-    const fields = resourceData.config?.docs?.fields ?? [];
+    let fields = resourceData.config?.docs?.fields ?? [];
+
+    // Rule A: with the snake_case surface enabled, top-level view column
+    // projections are displayed as their snake aliases (collision rule
+    // applied); required params are authored WHERE keys and are left as-is.
+    if (casing && casing.snakeCaseAliases && fields.length > 0) {
+        const aliasMap = buildAliasMap(fields.map(f => f.name));
+        fields = fields.map(f => {
+            const display = aliasMap.get(f.name) ?? f.name;
+            return display === f.name ? f : { ...f, name: display, wireName: f.name };
+        });
+    }
 
     if (fields.length === 0) {
         content += `See the SQL Definition (view DDL) for fields returned by this view.\n\n`;
@@ -27,7 +39,7 @@ export function docView(resourceData) {
 <tr>
     <td><CopyableCode code="${field.name}" /></td>
     <td><CopyableCode code="${field.type}" /></td>
-    <td>${sanitizeHtml(field.description)}</td>
+    <td>${sanitizeHtml(field.description)}${field.wireName ? ` (wire: ${field.wireName})` : ''}</td>
 </tr>`;
         }
 

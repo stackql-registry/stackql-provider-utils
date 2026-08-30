@@ -96,6 +96,8 @@ npm run generate-docs -- \
 
 On `generate-provider`, `--provider-name` is accepted as an alias for `--provider-id` so the flag name is consistent with the other commands.
 
+On `generate-docs` / `generate-docs-v2`, pass `--snake-case-aliases` for providers that set `config.snake_case_aliases: true` in `provider.yaml`, so fields and parameters are rendered as the engine's snake_case surface (see [docs/docgen.md](docs/docgen.md)). Without the flag, output is unchanged (wire names).
+
 ## Directory Structure
 
 A typical project structure for the development of a `stackql` provider would be...

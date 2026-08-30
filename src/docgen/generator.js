@@ -14,7 +14,13 @@ export async function generateDocs(options) {
         outputDir,          // e.g., 'website'
         providerDataDir,    // e.g., 'config/provider-data'
         dereferenced = false,
+        // true | false | { fields, params, body } - render identifiers as the
+        // engine's snake_case surface, per surface (see docgen/casing.js)
+        snakeCaseAliases = false,
     } = options;
+
+    // passed through unchanged; resolveSnakeCaseAliases normalises the shape
+    const casing = { snakeCaseAliases };
 
     console.log(`documenting ${providerName}...`);
 
@@ -61,7 +67,7 @@ export async function generateDocs(options) {
         const filePath = path.join(serviceDir, file);
         totalServicesCount++;
         const serviceFolder = `${servicesDir}/${serviceName}`;
-        await createDocsForService(filePath, providerName, serviceName, serviceFolder, dereferenced);
+        await createDocsForService(filePath, providerName, serviceName, serviceFolder, dereferenced, casing);
     }
 
     console.log(`Processed ${totalServicesCount} services`);
@@ -117,7 +123,7 @@ ${servicesToMarkdown(providerName, secondColumnServices)}
 }
 
 // Process each service sequentially
-async function createDocsForService(yamlFilePath, providerName, serviceName, serviceFolder, dereferenced = false) {
+async function createDocsForService(yamlFilePath, providerName, serviceName, serviceFolder, dereferenced = false, casing = null) {
 
     const data = yaml.load(fs.readFileSync(yamlFilePath, 'utf8'));
 
@@ -175,6 +181,7 @@ async function createDocsForService(yamlFilePath, providerName, serviceName, ser
             type: resourceType,
             resourceData,
             dereferencedAPI,
+            casing,
         });
     }    
 
@@ -292,7 +299,13 @@ export async function generateDocsv2(options) {
         providerDataDir,    // e.g., 'config/provider-data'
         dereferenced = false,
         succinct = false,   // use summary instead of description for method/example descriptions
+        // true | false | { fields, params, body } - render identifiers as the
+        // engine's snake_case surface, per surface (see docgen/casing.js)
+        snakeCaseAliases = false,
     } = options;
+
+    // passed through unchanged; resolveSnakeCaseAliases normalises the shape
+    const casing = { snakeCaseAliases };
 
     console.log(`documenting ${providerName} (v2)...`);
 
@@ -339,7 +352,7 @@ export async function generateDocsv2(options) {
         const filePath = path.join(serviceDir, file);
         totalServicesCount++;
         const serviceFolder = `${servicesDir}/${serviceName}`;
-        await createDocsForServicev2(filePath, providerName, serviceName, serviceFolder, dereferenced, succinct);
+        await createDocsForServicev2(filePath, providerName, serviceName, serviceFolder, dereferenced, succinct, casing);
     }
 
     console.log(`Processed ${totalServicesCount} services`);
@@ -395,7 +408,7 @@ ${servicesToMarkdown(providerName, secondColumnServices)}
 }
 
 // v2 service processing - uses SchemaTable for collapsible nested fields
-async function createDocsForServicev2(yamlFilePath, providerName, serviceName, serviceFolder, dereferenced = false, succinct = false) {
+async function createDocsForServicev2(yamlFilePath, providerName, serviceName, serviceFolder, dereferenced = false, succinct = false, casing = null) {
 
     const data = yaml.load(fs.readFileSync(yamlFilePath, 'utf8'));
 
@@ -453,6 +466,7 @@ async function createDocsForServicev2(yamlFilePath, providerName, serviceName, s
             type: resourceType,
             resourceData,
             dereferencedAPI,
+            casing,
         });
     }
 

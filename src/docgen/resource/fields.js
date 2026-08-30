@@ -5,6 +5,7 @@ import {
     generateSchemaJsonFromProps,
     sortSchemaFields,
 } from '../helpers.js';
+import { wireHint } from '../casing.js';
 import { docView } from './view.js';
 
 const mdCodeAnchor = "`";
@@ -16,7 +17,7 @@ const meaninglessDescriptions = [
     'success'
 ];
 
-export function createFieldsSection(resourceType, resourceData, dereferencedAPI) {
+export function createFieldsSection(resourceType, resourceData, dereferencedAPI, casing = null) {
     let content = '## Fields\n\n';
 
     if(resourceType === 'Resource'){
@@ -24,7 +25,7 @@ export function createFieldsSection(resourceType, resourceData, dereferencedAPI)
         content += 'The following fields are returned by `SELECT` queries:\n\n';
 
         // Use the reusable function to get methods with ordered fields
-        const methods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select');
+        const methods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select', casing);
         
         if (Object.keys(methods).length > 0) {
             // Create the tabs and markdown content
@@ -74,7 +75,7 @@ export function createFieldsSection(resourceType, resourceData, dereferencedAPI)
                     content += `\n<tr>
     <td><CopyableCode code="${propName}" /></td>
     <td><code>${propData.type}</code></td>
-    <td>${sanitizeHtml(propData.description)}</td>
+    <td>${sanitizeHtml(propData.description)}${wireHint(propData)}</td>
 </tr>`;
                 }
             
@@ -96,13 +97,13 @@ export function createFieldsSection(resourceType, resourceData, dereferencedAPI)
     } else {
         // its a view
         console.log(`processing view : ${resourceData.name}...`)
-        content += docView(resourceData);
+        content += docView(resourceData, casing);
     }
 
     return content;
 }
 
-export function createFieldsSectionv2(resourceType, resourceData, dereferencedAPI) {
+export function createFieldsSectionv2(resourceType, resourceData, dereferencedAPI, casing = null) {
     let content = '## Fields\n\n';
 
     if (resourceType === 'Resource') {
@@ -110,7 +111,7 @@ export function createFieldsSectionv2(resourceType, resourceData, dereferencedAP
         content += 'The following fields are returned by `SELECT` queries:\n\n';
 
         // Use the reusable function to get methods with ordered fields
-        const methods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select');
+        const methods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select', casing);
 
         if (Object.keys(methods).length > 0) {
             const methodNames = Object.keys(methods);
@@ -155,7 +156,7 @@ export function createFieldsSectionv2(resourceType, resourceData, dereferencedAP
     } else {
         // its a view
         console.log(`processing view : ${resourceData.name}...`)
-        content += docView(resourceData);
+        content += docView(resourceData, casing);
     }
 
     return content;

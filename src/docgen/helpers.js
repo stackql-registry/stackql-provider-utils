@@ -1,5 +1,7 @@
 // src/docgen/helpers.js
 
+import { aliasTopLevelKeys, aliasRequestBody, wireHint, WIRE_NAME, IS_SERVER_VAR, resolveSnakeCaseAliases } from './casing.js';
+
 // exported functions for use in other modules
 
 export function getIndefiniteArticle(resourceName) {
@@ -83,8 +85,9 @@ export function sanitizeHtml(text) {
   return result;
 }
 
-export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sqlVerb) {
+export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sqlVerb, casing = null) {
     const methods = {};
+    const alias = resolveSnakeCaseAliases(casing && casing.snakeCaseAliases);
 
     if (sqlVerb === 'exec') {
         // Get all SQL verb methods
@@ -134,7 +137,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
                 }
 
                 // Get response and params using the same function as for SQL verbs
-                const { respProps, respDescription, opDescription, opSummary, requestBody } = getHttpOperationInfo(
+                let { respProps, respDescription, opDescription, opSummary, requestBody } = getHttpOperationInfo(
                     dereferencedAPI,
                     resolvedPath,
                     resolvedVerb,
@@ -149,6 +152,14 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
                     resolvedVerb
                 );
 
+                // Rule A (fields): top-level response fields are aliased.
+                // EXEC variables and body attributes stay wire-cased - the
+                // engine resolves exec inputs by wire name only, so Rule B is
+                // not applied to exec methods.
+                if (alias.fields) {
+                    respProps = aliasTopLevelKeys(respProps);
+                }
+
                 // Initialize the method with the same structure as SQL methods
                 methods[methodName] = {
                     opDescription,
@@ -160,6 +171,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
                     requestBody: requestBody || {},
                     rawRespProps: respProps,
                     methodConfig: methodData.config || null,
+                    nativeCasing: methodData.request?.nativeCasing || null,
                 };
 
                 // Format and sort the properties using our helper functions
@@ -178,9 +190,33 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
     }
 
     for (const thisMethod of resourceData.sqlVerbs[sqlVerb]) {
-        const {path, httpVerb, mediaType, openAPIDocKey, objectKey, schemaOverride, methodName, methodConfig} = getHttpOperationForSqlVerb(thisMethod.$ref, resourceData);
-        const {respProps, respDescription, opDescription, opSummary, requestBody} = getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey, schemaOverride);
-        const {requiredParams, optionalParams} = getHttpOperationParams(dereferencedAPI, path, httpVerb);
+        const {path, httpVerb, mediaType, openAPIDocKey, objectKey, schemaOverride, methodName, methodConfig, nativeCasing} = getHttpOperationForSqlVerb(thisMethod.$ref, resourceData);
+        let {respProps, respDescription, opDescription, opSummary, requestBody} = getHttpOperationInfo(dereferencedAPI, path, httpVerb, mediaType, openAPIDocKey, objectKey, schemaOverride);
+        let {requiredParams, optionalParams} = getHttpOperationParams(dereferencedAPI, path, httpVerb);
+
+        // Rule A (fields): top-level response fields are aliased. Depends only
+        // on the provider document setting config.snake_case_aliases.
+        if (alias.fields) {
+            respProps = aliasTopLevelKeys(respProps);
+        }
+        // Rule B (params / body): aliased only when the method declares
+        // request.nativeCasing. Server variables are authored by the provider
+        // and are never aliased. Params and body are separately switchable
+        // because the engine can translate one without the other.
+        if ((alias.params || alias.body) && nativeCasing) {
+            if (alias.params) {
+                const reqNames = Object.keys(requiredParams || {});
+                const optNames = Object.keys(optionalParams || {});
+                requiredParams = aliasTopLevelKeys(requiredParams || {}, {
+                    reserved: optNames,
+                    skip: d => !!(d && d[IS_SERVER_VAR]),
+                });
+                optionalParams = aliasTopLevelKeys(optionalParams || {}, { reserved: reqNames });
+            }
+            if (alias.body) {
+                requestBody = aliasRequestBody(requestBody);
+            }
+        }
 
         // Initialize the method object with description and params
         methods[methodName] = {
@@ -193,6 +229,7 @@ export function getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, sq
             requestBody: requestBody || {},
             rawRespProps: respProps,
             methodConfig: methodConfig || null,
+            nativeCasing: nativeCasing || null,
         };
 
         // Format and sort the properties using our helper functions
@@ -299,6 +336,10 @@ function formatProperties(respProps) {
             type: typeString,
             description: fullDescription
         };
+        // carry the wire-name marker for renamed (snake-aliased) fields
+        if (propDetails[WIRE_NAME]) {
+            allProperties[propName][WIRE_NAME] = propDetails[WIRE_NAME];
+        }
     }
     return allProperties;
 }
@@ -360,7 +401,8 @@ function getRequiredServerVars(dereferencedAPI) {
         // Create the server variable entry
         serverVars[varName] = {
             type: typeString,
-            description: description
+            description: description,
+            [IS_SERVER_VAR]: true,
         };
     }
     
@@ -386,7 +428,8 @@ function getHttpOperationForSqlVerb(sqlVerbRef, resourceData){
         objectKey: methodObj.response.objectKey || false,
         schemaOverride: methodObj.response.schema_override || false,
         methodName,
-        methodConfig: methodObj.config || null
+        methodConfig: methodObj.config || null,
+        nativeCasing: methodObj.request?.nativeCasing || null
     }
 }
 
@@ -659,6 +702,9 @@ export function generateSchemaJsonFromProps(respProps, depth = 0, maxDepth = 4) 
 
         let propType = prop.type || 'object';
         let propDesc = sanitizeHtml(prop.description || '');
+
+        // snake-aliased top-level fields carry their wire name (opt-in switch)
+        propDesc += wireHint(prop);
 
         // Collect enum values from enum or x-enum keys
         const enumValues = prop['enum'] || prop['x-enum'];

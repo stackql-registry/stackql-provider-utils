@@ -4,8 +4,8 @@ import {
     sanitizeHtml
 } from '../../helpers.js';
 
-export function createSelectExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
-    const selectMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select');
+export function createSelectExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false, casing = null) {
+    const selectMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'select', casing);
     
     // if there are no select methods, return empty content
     if (Object.keys(selectMethods).length === 0) {

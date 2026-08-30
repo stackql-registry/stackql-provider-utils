@@ -4,8 +4,8 @@ import {
     sanitizeHtml
 } from '../../helpers.js';
 
-export function createExecExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
-    const execMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'exec');
+export function createExecExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false, casing = null) {
+    const execMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'exec', casing);
     
     // if there are no exec methods, return empty content
     if (Object.keys(execMethods).length === 0) {
@@ -13,6 +13,12 @@ export function createExecExamples(providerName, serviceName, resourceName, reso
     }
     
     let content = '\n\n## Lifecycle Methods\n\n';
+
+    // With the snake_case surface enabled, EXEC variables are still resolved
+    // by wire name only - make that explicit so readers do not use aliases.
+    if (casing && casing.snakeCaseAliases) {
+        content += 'EXEC variables use wire (API) names.\n\n';
+    }
     
     // Create tab structure with values array
     content += '<Tabs\n    defaultValue="' + Object.keys(execMethods)[0] + '"\n    values={[\n';

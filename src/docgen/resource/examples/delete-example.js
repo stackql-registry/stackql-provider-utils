@@ -4,8 +4,8 @@ import {
     sanitizeHtml,
 } from '../../helpers.js';
 
-export function createDeleteExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false) {
-    const deleteMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'delete');
+export function createDeleteExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, succinct = false, casing = null) {
+    const deleteMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, 'delete', casing);
 
     // if there are no delete methods, return empty content
     if (Object.keys(deleteMethods).length === 0) {

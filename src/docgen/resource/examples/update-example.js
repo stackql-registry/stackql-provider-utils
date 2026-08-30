@@ -4,8 +4,8 @@ import {
     sanitizeHtml
 } from '../../helpers.js';
 
-export function createUpdateExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, isReplace = false, succinct = false) {
-    const updateMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, isReplace ? 'replace' : 'update');
+export function createUpdateExamples(providerName, serviceName, resourceName, resourceData, dereferencedAPI, isReplace = false, succinct = false, casing = null) {
+    const updateMethods = getSqlMethodsWithOrderedFields(resourceData, dereferencedAPI, isReplace ? 'replace' : 'update', casing);
     
     // if there are no update methods, return empty content
     if (Object.keys(updateMethods).length === 0) {
