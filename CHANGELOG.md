@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.10
+
+- deps: `@stackql/deno-openapi-dereferencer` ^0.3.2, which moves jsonpath-plus from a 7.0.0 pin to ^10.3.0 (CVE-2024-21534, CVE-2025-1302). docgen output is unchanged - it only calls `flattenAllOf`, which does not use JSONPath
+
 ## 0.7.9
 
 - docgen: `snakeCaseAliases` accepts a per-surface object - `{ fields, params, body }` - as well as the existing boolean. The three surfaces are translated by different engine mechanisms and do not necessarily land together, so a provider can be correct on one and not another; documenting a surface the engine does not serve yields copy-paste examples that fail
