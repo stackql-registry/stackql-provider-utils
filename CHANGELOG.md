@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.11
+
+- docgen: optional `sourceProject` (CLI: `--source-project URL`) adds a `source project` row to the Provider Summary admonition on the provider index page, rendered as a bold link whose label is the repository name (last URL path segment, `.git` stripped) and whose target is the URL as supplied. Applies to `generateDocs` and `generateDocsv2`. Omitted: the admonition is unchanged
+
 ## 0.7.10
 
 - deps: `@stackql/deno-openapi-dereferencer` ^0.3.2, which moves jsonpath-plus from a 7.0.0 pin to ^10.3.0 (CVE-2024-21534, CVE-2025-1302). docgen output is unchanged - it only calls `flattenAllOf`, which does not use JSONPath

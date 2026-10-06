@@ -24,6 +24,42 @@ async function generateDocs(options) {
 | `providerDataDir` | string | Yes | Directory containing provider header files |
 | `verbose` | boolean | No | Whether to output detailed logs (default: false) |
 | `snakeCaseAliases` | boolean \| object | No | Render identifiers as the engine's snake_case surface (default: false, see below) |
+| `sourceProject` | string | No | Repository URL of the provider source project; adds a `source project` row to the Provider Summary admonition (default: none, see below) |
+
+## Provider Summary
+
+The provider index page carries a Docusaurus `info` admonition titled `Provider Summary` between the two header files. By default it has two rows, the service and resource counts:
+
+```markdown
+:::info[Provider Summary]
+
+total services: __2__
+total resources: __2__
+
+:::
+```
+
+Pass `sourceProject` (CLI: `--source-project URL`) to add a third row linking to the repository the provider is built from. The link target is the URL as supplied and the label is the repository name, taken as the last path segment of the URL with any trailing slash or `.git` suffix removed:
+
+```markdown
+:::info[Provider Summary]
+
+total services: __2__
+total resources: __2__
+source project: __[stackql-provider-typesafe](https://github.com/stackql-registry/stackql-provider-typesafe)__
+
+:::
+```
+
+```javascript
+await docgen.generateDocs({ ...opts, sourceProject: 'https://github.com/stackql-registry/stackql-provider-typesafe' });
+```
+
+```bash
+docgen-utils generate-docs ... --source-project https://github.com/stackql-registry/stackql-provider-typesafe
+```
+
+When `sourceProject` is omitted the admonition is unchanged. The option is accepted by both `generateDocs` and `generateDocsv2`.
 
 ## Snake Case Aliases
 
@@ -134,6 +170,7 @@ outputDir/
 
 The main provider documentation includes:
 - Provider overview (from headerContent1.txt)
+- Provider Summary admonition (service and resource counts, plus the source project link when `sourceProject` is set)
 - Authentication instructions
 - Available services list
 - Additional information (from headerContent2.txt)

@@ -31,6 +31,8 @@ function collectOptions(args) {
   const snakeCaseAliases = hasFlag(args, '--snake-case-aliases');
   // per-surface form: --snake-case-aliases=params,fields (see docgen/casing.js)
   const snakeCaseSurfaces = getInlineArg(args, '--snake-case-aliases');
+  // optional repo URL; adds a "source project" row to the Provider Summary admonition
+  const sourceProject = getArg(args, '--source-project') || getInlineArg(args, '--source-project');
 
   const missing = [];
   if (!providerName) missing.push('--provider-name');
@@ -38,7 +40,13 @@ function collectOptions(args) {
   if (!outputDir) missing.push('--output-dir');
   if (!providerDataDir) missing.push('--provider-data-dir');
   const invalid = [];
+  if (hasFlag(args, '--source-project') && !sourceProject) {
+    invalid.push('--source-project: expected a repository URL');
+  }
   const opts = { providerName, providerDir, outputDir, providerDataDir, verbose, missing, invalid };
+  if (sourceProject) {
+    opts.sourceProject = sourceProject;
+  }
   if (snakeCaseSurfaces) {
     const wanted = new Set(snakeCaseSurfaces.split(',').map(v => v.trim()).filter(Boolean));
     const known = ['fields', 'params', 'body'];
@@ -70,7 +78,7 @@ function maybeHintSnakeCaseAliases(opts) {
 }
 
 function usageFor(subcmd) {
-  return `Usage: docgen-utils ${subcmd} --provider-name NAME --provider-dir DIR --output-dir DIR --provider-data-dir DIR [--verbose] [--snake-case-aliases[=fields,params,body]]`;
+  return `Usage: docgen-utils ${subcmd} --provider-name NAME --provider-dir DIR --output-dir DIR --provider-data-dir DIR [--verbose] [--snake-case-aliases[=fields,params,body]] [--source-project URL]`;
 }
 
 async function runGenerateDocs(args) {
@@ -113,10 +121,15 @@ function printUsage() {
   console.error('Usage: docgen-utils <command> [options]');
   console.error('');
   console.error('Commands:');
-  console.error('  generate-docs     --provider-name NAME --provider-dir DIR --output-dir DIR --provider-data-dir DIR [--verbose] [--snake-case-aliases[=fields,params,body]]');
-  console.error('  generate-docs-v2  --provider-name NAME --provider-dir DIR --output-dir DIR --provider-data-dir DIR [--verbose] [--snake-case-aliases[=fields,params,body]]');
+  console.error('  generate-docs     --provider-name NAME --provider-dir DIR --output-dir DIR --provider-data-dir DIR [--verbose] [--snake-case-aliases[=fields,params,body]] [--source-project URL]');
+  console.error('  generate-docs-v2  --provider-name NAME --provider-dir DIR --output-dir DIR --provider-data-dir DIR [--verbose] [--snake-case-aliases[=fields,params,body]] [--source-project URL]');
   console.error('');
   console.error('Options:');
+  console.error('  --source-project URL  repository URL of the provider source project, e.g.');
+  console.error('                        https://github.com/stackql-registry/stackql-provider-typesafe.');
+  console.error('                        Adds a "source project" row to the Provider Summary');
+  console.error('                        admonition on the provider index page, linking the repo');
+  console.error('                        name to the URL. Omitted: no row is added.');
   console.error('  --snake-case-aliases[=fields,params,body]');
   console.error('                        render identifiers as the engine snake_case surface. The bare');
   console.error('                        flag enables every surface; the list form enables only those');

@@ -91,12 +91,15 @@ npm run generate-docs -- \
   --provider-name github \
   --provider-dir ./provider-dev/openapi/src/github/v00.00.00000 \
   --output-dir ./website \
-  --provider-data-dir ./provider-dev/docgen/provider-data
+  --provider-data-dir ./provider-dev/docgen/provider-data \
+  --source-project https://github.com/stackql-registry/stackql-provider-github
 ```
 
 On `generate-provider`, `--provider-name` is accepted as an alias for `--provider-id` so the flag name is consistent with the other commands.
 
 On `generate-docs` / `generate-docs-v2`, pass `--snake-case-aliases` for providers that set `config.snake_case_aliases: true` in `provider.yaml`, so fields and parameters are rendered as the engine's snake_case surface (see [docs/docgen.md](docs/docgen.md)). Without the flag, output is unchanged (wire names).
+
+On `generate-docs` / `generate-docs-v2`, pass `--source-project URL` with the provider repository URL to add a `source project` row to the Provider Summary admonition on the provider index page, linking the repository name to the URL (see [docs/docgen.md](docs/docgen.md)). Without the flag, the admonition is unchanged.
 
 ## Directory Structure
 

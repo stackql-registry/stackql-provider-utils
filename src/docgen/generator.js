@@ -17,6 +17,9 @@ export async function generateDocs(options) {
         // true | false | { fields, params, body } - render identifiers as the
         // engine's snake_case surface, per surface (see docgen/casing.js)
         snakeCaseAliases = false,
+        // optional repo URL, e.g. 'https://github.com/stackql-registry/stackql-provider-typesafe';
+        // when set, a "source project" row is added to the Provider Summary admonition
+        sourceProject = null,
     } = options;
 
     // passed through unchanged; resolveSnakeCaseAliases normalises the shape
@@ -94,7 +97,7 @@ export async function generateDocs(options) {
 
 total services: __${totalServicesCount}__  
 total resources: __${totalResourcesCount}__  
-
+${sourceProjectRow(sourceProject, '  ')}
 :::
 
 ${headerContent2}
@@ -302,6 +305,9 @@ export async function generateDocsv2(options) {
         // true | false | { fields, params, body } - render identifiers as the
         // engine's snake_case surface, per surface (see docgen/casing.js)
         snakeCaseAliases = false,
+        // optional repo URL, e.g. 'https://github.com/stackql-registry/stackql-provider-typesafe';
+        // when set, a "source project" row is added to the Provider Summary admonition
+        sourceProject = null,
     } = options;
 
     // passed through unchanged; resolveSnakeCaseAliases normalises the shape
@@ -379,7 +385,7 @@ export async function generateDocsv2(options) {
 
 total services: __${totalServicesCount}__
 total resources: __${totalResourcesCount}__
-
+${sourceProjectRow(sourceProject)}
 :::
 
 ${headerContent2}
@@ -519,4 +525,17 @@ async function processResourcev2(providerName, serviceFolder, serviceName, resou
 // Function to convert services to markdown links
 function servicesToMarkdown(providerName, servicesList) {
     return servicesList.map(service => `<a href="/services/${service}/">${service}</a><br />`).join('\n');
+}
+
+// Optional "source project" row for the Provider Summary admonition. The link
+// target is the value as supplied; the label is the repository name (last
+// path segment, trailing slash and .git stripped). Returns '' when no source
+// project was given, so the admonition is unchanged. lineSuffix carries the
+// two-space markdown hard break used by the v1 template.
+function sourceProjectRow(sourceProject, lineSuffix = '') {
+    if (!sourceProject) return '';
+    const url = String(sourceProject).trim();
+    if (!url) return '';
+    const label = url.replace(/\/+$/, '').split('/').pop().replace(/\.git$/, '') || url;
+    return `source project: __[${label}](${url})__${lineSuffix}\n`;
 }
