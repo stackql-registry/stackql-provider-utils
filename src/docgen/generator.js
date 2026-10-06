@@ -383,9 +383,9 @@ export async function generateDocsv2(options) {
 
 :::info[Provider Summary]
 
-total services: __${totalServicesCount}__
-total resources: __${totalResourcesCount}__
-${sourceProjectRow(sourceProject)}
+total services: __${totalServicesCount}__  
+total resources: __${totalResourcesCount}__  
+${sourceProjectRow(sourceProject, '  ')}
 :::
 
 ${headerContent2}
@@ -531,7 +531,7 @@ function servicesToMarkdown(providerName, servicesList) {
 // target is the value as supplied; the label is the repository name (last
 // path segment, trailing slash and .git stripped). Returns '' when no source
 // project was given, so the admonition is unchanged. lineSuffix carries the
-// two-space markdown hard break used by the v1 template.
+// two-space markdown hard break; both the v1 and v2 templates pass it.
 function sourceProjectRow(sourceProject, lineSuffix = '') {
     if (!sourceProject) return '';
     const url = String(sourceProject).trim();

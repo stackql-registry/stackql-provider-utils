@@ -51,6 +51,8 @@ source project: __[stackql-provider-typesafe](https://github.com/stackql-registr
 :::
 ```
 
+Each row ends with a two-space Markdown hard break so Docusaurus renders the rows on separate lines (the sample cannot show the trailing spaces).
+
 ```javascript
 await docgen.generateDocs({ ...opts, sourceProject: 'https://github.com/stackql-registry/stackql-provider-typesafe' });
 ```

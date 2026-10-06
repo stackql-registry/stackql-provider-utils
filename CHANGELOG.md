@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.12
+
+- docgen: `generateDocsv2` (CLI: `generate-docs-v2`) ends each Provider Summary row with the two-space Markdown hard break the v1 template already uses, so `total services`, `total resources` and `source project` render on separate lines instead of one paragraph. v1 output is unchanged. Covered by tests/docgen/summary.test.js
+
 ## 0.7.11
 
 - docgen: optional `sourceProject` (CLI: `--source-project URL`) adds a `source project` row to the Provider Summary admonition on the provider index page, rendered as a bold link whose label is the repository name (last URL path segment, `.git` stripped) and whose target is the URL as supplied. Applies to `generateDocs` and `generateDocsv2`. Omitted: the admonition is unchanged
