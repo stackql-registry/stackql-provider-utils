@@ -1,6 +1,6 @@
 {
   "name": "@stackql/provider-utils",
-  "version": "0.7.12",
+  "version": "0.8.0",
   "description": "Utilities for building StackQL providers from OpenAPI specifications.",
   "type": "module",
   "main": "./src/index.js",
