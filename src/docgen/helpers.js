@@ -38,7 +38,8 @@ function decodeEntities(text) {
   return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (match, entity) => {
     if (entity[0] === '#') {
       const code = entity[1] === 'x' || entity[1] === 'X' ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
-      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+      const valid = Number.isFinite(code) && code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
+      return valid ? String.fromCodePoint(code) : match;
     }
     return HTML_ENTITIES[entity.toLowerCase()] ?? match;
   });
@@ -65,8 +66,10 @@ function firstSentence(text) {
  * collapsed, then the first sentence, capped at META_DESCRIPTION_MAX
  * characters on a word boundary ("..." marks a cut).
  * @param {string} text - The source description (may be empty)
- * @param {string} fallback - Returned when nothing is left after cleanup
- * @return {string} - Plain text, at most META_DESCRIPTION_MAX characters
+ * @param {string} fallback - Returned as given (not capped) when nothing is
+ *   left after cleanup
+ * @return {string} - Plain text: at most META_DESCRIPTION_MAX characters
+ *   when derived from `text`, otherwise `fallback`
  */
 export function metaDescription(text, fallback) {
   const plain = decodeEntities(

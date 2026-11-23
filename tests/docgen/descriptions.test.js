@@ -86,6 +86,8 @@ describe('metaDescription', () => {
 
   test('drops inline code backticks and decodes entities', () => {
     expect(metaDescription('The `vw_info` view &amp; friends.', 'x')).toBe('The vw_info view & friends.');
+    // numeric entities decode, except surrogate code points, which stay as written
+    expect(metaDescription('A &#x2F; B &#65; &#xD800; C.', 'x')).toBe('A / B A &#xD800; C.');
   });
 
   test('collapses whitespace and takes the first sentence', () => {
