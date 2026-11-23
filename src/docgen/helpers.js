@@ -25,6 +25,84 @@ export function getIndefiniteArticle(resourceName) {
   return article;
 }
 
+// Longest meta description a generated page carries; search engines cut
+// the snippet at about this length anyway.
+export const META_DESCRIPTION_MAX = 160;
+
+// Words whose trailing period does not end a sentence.
+const NON_TERMINAL_ABBREVIATION = /(?:^|[\s(])(?:e\.g|i\.e|etc|vs|approx|incl|cf|inc|ltd|co|no)\.$/i;
+
+const HTML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+function decodeEntities(text) {
+  return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (match, entity) => {
+    if (entity[0] === '#') {
+      const code = entity[1] === 'x' || entity[1] === 'X' ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    return HTML_ENTITIES[entity.toLowerCase()] ?? match;
+  });
+}
+
+// The first sentence: up to the first '.', '!' or '?' followed by whitespace
+// or the end, skipping abbreviations such as "e.g.". The whole text when no
+// sentence end is found.
+function firstSentence(text) {
+  const end = /[.!?](?=\s|$)/g;
+  let match;
+  while ((match = end.exec(text)) !== null) {
+    const sentence = text.slice(0, match.index + 1);
+    if (!NON_TERMINAL_ABBREVIATION.test(sentence)) return sentence;
+  }
+  return text;
+}
+
+/**
+ * The front matter `description:` (the page's meta description) for a
+ * generated page, derived from a description that may carry HTML and
+ * Markdown: HTML tags and Markdown links stripped (link text kept), inline
+ * code backticks and bold markers dropped, entities decoded, whitespace
+ * collapsed, then the first sentence, capped at META_DESCRIPTION_MAX
+ * characters on a word boundary ("..." marks a cut).
+ * @param {string} text - The source description (may be empty)
+ * @param {string} fallback - Returned when nothing is left after cleanup
+ * @return {string} - Plain text, at most META_DESCRIPTION_MAX characters
+ */
+export function metaDescription(text, fallback) {
+  const plain = decodeEntities(
+    String(text ?? '')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/<\/?(?:br|p|div|li|ul|ol|tr|td|th|table|tbody|thead|h[1-6]|blockquote|pre)\b[^>]*>/gi, ' ')
+      .replace(/<\/?[a-z][^>]*>/gi, '')
+      .replace(/`/g, '')
+      .replace(/\*\*/g, '')
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!plain) return fallback;
+
+  const sentence = firstSentence(plain);
+  if (sentence.length <= META_DESCRIPTION_MAX) return sentence;
+  const room = META_DESCRIPTION_MAX - 3;
+  let cut = sentence.slice(0, room + 1);
+  const space = cut.lastIndexOf(' ');
+  cut = space > 0 ? cut.slice(0, space) : sentence.slice(0, room);
+  return `${cut.replace(/[\s,;:.\-]+$/, '')}...`;
+}
+
+/**
+ * A YAML double-quoted scalar for a front matter value. JSON string syntax
+ * is a subset of YAML's double-quoted style, so colons, quotes, '#' and
+ * newlines in the value cannot break the front matter.
+ * @param {string} value
+ * @return {string}
+ */
+export function yamlString(value) {
+  return JSON.stringify(String(value));
+}
+
 /**
  * Sanitizes HTML with special handling for allowed tags and backticked content
  * @param {string} text - The text to sanitize

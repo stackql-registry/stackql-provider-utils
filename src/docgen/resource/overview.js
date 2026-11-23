@@ -1,7 +1,15 @@
 // src/docgen/resource/overview.js
 import { 
     getIndefiniteArticle, 
+    metaDescription,
+    yamlString,
 } from '../helpers.js';
+
+// The page's meta description: the resource description's first sentence
+// when there is one, the provider-wide line otherwise.
+function resourcePageDescription(resourceDescription, providerName) {
+  return yamlString(metaDescription(resourceDescription, `Query, deploy and manage ${providerName} resources using SQL`));
+}
 
 export function createOverviewSection(resourceName, resourceType, resourceDescription, providerName, serviceName) {
 
@@ -16,7 +24,7 @@ keywords:
   - infrastructure-as-code
   - configuration-as-data
   - cloud inventory
-description: Query, deploy and manage ${providerName} resources using SQL
+description: ${resourcePageDescription(resourceDescription, providerName)}
 custom_edit_url: null
 image: /img/stackql-${providerName}-provider-featured-image.png
 ---
@@ -56,7 +64,7 @@ keywords:
   - infrastructure-as-code
   - configuration-as-data
   - cloud inventory
-description: Query, deploy and manage ${providerName} resources using SQL
+description: ${resourcePageDescription(resourceDescription, providerName)}
 custom_edit_url: null
 image: /img/stackql-${providerName}-provider-featured-image.png
 ---

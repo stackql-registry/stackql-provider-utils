@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { createResourceIndexContent, createResourceIndexContentv2 } from './resource-content.js';
+import { yamlString } from './helpers.js';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import * as deno_openapi_dereferencer from "@stackql/deno-openapi-dereferencer";
 
@@ -262,7 +263,7 @@ keywords:
   - infrastructure-as-code
   - configuration-as-data
   - cloud inventory
-description: Query, deploy and manage ${providerName} resources using SQL
+description: ${yamlString(`Query, deploy and manage ${providerName} ${serviceName} resources using SQL`)}
 custom_edit_url: null
 image: /img/stackql-${providerName}-provider-featured-image.png
 ---

@@ -193,6 +193,16 @@ Resource documentation includes:
 - Example queries
 - Request and response details
 
+### Page descriptions
+
+Each generated page's front matter `description:` becomes its meta description (and the `WebPage.description` of any structured data built from it), so it is set per page rather than repeated across the site:
+
+- Resource pages: the first sentence of the resource's `description` in the provider spec, with HTML tags and Markdown links stripped (their text kept), inline code backticks dropped, entities decoded and whitespace collapsed, capped at 160 characters on a word boundary (`...` marks a cut). A resource with no description falls back to `Query, deploy and manage <provider> resources using SQL`.
+- Service index pages: `Query, deploy and manage <provider> <service> resources using SQL`.
+- The provider index page: whatever `headerContent1.txt` sets; docgen does not touch it.
+
+Values are written as YAML double-quoted scalars (`JSON.stringify`), so colons, quotes, `#` and newlines in a description cannot break the front matter. Applies to `generateDocs` and `generateDocsv2`.
+
 ## Example Header Content Files
 
 ### headerContent1.txt

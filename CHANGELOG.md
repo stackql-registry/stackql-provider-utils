@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+Regenerated output changes for every provider: the front matter `description:` of every resource and service page.
+
+- docgen: per-page descriptions. Resource pages take the first sentence of the resource description (HTML tags and Markdown links stripped, inline code backticks dropped, entities decoded, whitespace collapsed, capped at 160 characters on a word boundary), falling back to the former `Query, deploy and manage <provider> resources using SQL` when the resource has none. Service index pages read `Query, deploy and manage <provider> <service> resources using SQL`. The provider index page keeps the description from `headerContent1.txt`. Applies to `generateDocs` and `generateDocsv2`
+- docgen: front matter descriptions are written as YAML double-quoted scalars (`JSON.stringify`), so a description containing a colon, quotes, `#` or a newline still parses
+- new helpers in `src/docgen/helpers.js`: `metaDescription(text, fallback)`, `yamlString(value)`, `META_DESCRIPTION_MAX`. Covered by tests/docgen/descriptions.test.js
+
 ## 0.7.12
 
 - docgen: `generateDocsv2` (CLI: `generate-docs-v2`) ends each Provider Summary row with the two-space Markdown hard break the v1 template already uses, so `total services`, `total resources` and `source project` render on separate lines instead of one paragraph. v1 output is unchanged. Covered by tests/docgen/summary.test.js
