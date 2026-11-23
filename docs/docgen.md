@@ -197,7 +197,7 @@ Resource documentation includes:
 
 Each generated page's front matter `description:` becomes its meta description (and the `WebPage.description` of any structured data built from it), so it is set per page rather than repeated across the site:
 
-- Resource pages: the first sentence of the resource's `description` in the provider spec, with HTML tags and Markdown links stripped (their text kept), inline code backticks dropped, entities decoded and whitespace collapsed, capped at 160 characters on a word boundary (`...` marks a cut). A resource with no description falls back to `Query, deploy and manage <provider> resources using SQL`.
+- Resource pages: the first sentence of the resource's `description` in the provider spec, with HTML tags and Markdown links stripped (their text kept), inline code backticks dropped, entities decoded and whitespace collapsed, capped at 160 characters on a word boundary (`...` marks a cut). A resource with no description (or one that is empty after cleanup) gets `Query, deploy and manage the <resource> resource in the <provider> <service> service using SQL`, so resource pages never share the provider-wide line or each other's description.
 - Service index pages: `Query, deploy and manage <provider> <service> resources using SQL`.
 - The provider index page: whatever `headerContent1.txt` sets; docgen does not touch it.
 

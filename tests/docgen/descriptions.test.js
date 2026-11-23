@@ -5,15 +5,27 @@ import yaml from 'js-yaml';
 import { fileURLToPath } from 'url';
 import { generateDocs, generateDocsv2 } from '../../src/docgen/generator.js';
 import { metaDescription, yamlString, META_DESCRIPTION_MAX } from '../../src/docgen/helpers.js';
+import { resourceFallbackDescription } from '../../src/docgen/resource/overview.js';
 
 // Per-page front matter descriptions: resource pages take the first
-// sentence of the resource description, service index pages name the
-// service, and the provider index keeps the one in headerContent1.txt.
+// sentence of the resource description, or a line naming the resource,
+// service and provider; service index pages name the service; the provider
+// index keeps the one in headerContent1.txt.
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const providerDir = path.join(here, 'src', 'homebrew', 'v00.00.00000');
 const providerDataDir = path.join(here, 'provider-data', 'homebrew');
-const FALLBACK = 'Query, deploy and manage homebrew resources using SQL';
+// The provider-wide line resource pages used to share; none may carry it now.
+const PROVIDER_WIDE = 'Query, deploy and manage homebrew resources using SQL';
+const fallback = (resource) => `Query, deploy and manage the ${resource} resource in the homebrew formula service using SQL`;
+
+// The description of every generated resource page (resource -> description).
+function resourceDescriptions(outputDir) {
+  const dir = path.join(outputDir, 'docs', 'services', 'formula');
+  return Object.fromEntries(fs.readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => [e.name, frontMatter(path.join(dir, e.name, 'index.md')).description]));
+}
 
 const tmpDirs = [];
 function tmpdir() {
@@ -115,15 +127,20 @@ describe.each([
   ['generateDocs', generateDocs],
   ['generateDocsv2', generateDocsv2],
 ])('%s front matter descriptions', (_, generate) => {
-  test('as-is fixture: the described resource gets its first sentence, the rest the fallback', async () => {
+  test('as-is fixture: the described resource gets its first sentence, the rest a per-resource fallback', async () => {
     const out = tmpdir();
     await generate({ providerName: 'homebrew', providerDir, providerDataDir, outputDir: out });
 
     expect(frontMatter(resourcePage(out, 'vw_info')).description)
       .toBe('The vw_info view provides detailed information about the StackQL formula in the Homebrew package manager.');
     for (const resource of ['formula', 'vw_build_errors', 'vw_versions']) {
-      expect(frontMatter(resourcePage(out, resource)).description).toBe(FALLBACK);
+      expect(frontMatter(resourcePage(out, resource)).description).toBe(fallback(resource));
     }
+    // no resource page carries the provider-wide line, and no two share one
+    const all = resourceDescriptions(out);
+    expect(Object.keys(all).length).toBeGreaterThan(5);
+    expect(Object.values(all)).not.toContain(PROVIDER_WIDE);
+    expect(new Set(Object.values(all)).size).toBe(Object.keys(all).length);
     // service index names the service
     expect(frontMatter(path.join(out, 'docs', 'services', 'formula', 'index.md')).description)
       .toBe('Query, deploy and manage homebrew formula resources using SQL');
@@ -152,11 +169,10 @@ describe.each([
       vw_build_errors: 'Build errors per formula and OS.',
       vw_conflicts: 'Conflicts between formula entries, see brew.',
       vw_dependencies: 'Dependencies of each formula # with a hash.',
-      vw_lifecycle: FALLBACK,
-      vw_urls: FALLBACK,
+      vw_lifecycle: fallback('vw_lifecycle'),
+      vw_urls: fallback('vw_urls'),
     });
-    const described = Object.keys(descriptions).filter((r) => descriptions[r]);
-    expect(new Set(described.map((r) => got[r])).size).toBe(described.length);
+    expect(new Set(Object.values(got)).size).toBe(Object.keys(descriptions).length);
 
     // every generated page's front matter is valid YAML
     const pages = fs.readdirSync(path.join(out, 'docs', 'services', 'formula'), { recursive: true })
@@ -166,4 +182,35 @@ describe.each([
       expect(() => frontMatter(path.join(out, 'docs', 'services', 'formula', page))).not.toThrow();
     }
   }, 30000);
+
+  test('resources without descriptions get different fallbacks naming the resource, service and provider', async () => {
+    // every resource stripped of its description
+    const names = Object.keys(resourceDescriptions(await (async () => {
+      const probe = tmpdir();
+      await generate({ providerName: 'homebrew', providerDir, providerDataDir, outputDir: probe });
+      return probe;
+    })()));
+    const out = tmpdir();
+    await generate({
+      providerName: 'homebrew',
+      providerDir: fixtureWith(Object.fromEntries(names.map((n) => [n, null]))),
+      providerDataDir,
+      outputDir: out,
+    });
+    const got = resourceDescriptions(out);
+
+    expect(got.vw_lifecycle).not.toBe(got.vw_urls);
+    for (const [resource, description] of Object.entries(got)) {
+      expect(description).toBe(fallback(resource));
+      expect(description).toContain(resource);
+      expect(description).toContain('formula');
+      expect(description).toContain('homebrew');
+    }
+    expect(new Set(Object.values(got)).size).toBe(names.length);
+  }, 30000);
+});
+
+test('resourceFallbackDescription names the resource, provider and service', () => {
+  expect(resourceFallbackDescription('zones_settings', 'cloudflare', 'zones'))
+    .toBe('Query, deploy and manage the zones_settings resource in the cloudflare zones service using SQL');
 });

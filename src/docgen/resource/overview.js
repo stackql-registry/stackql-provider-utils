@@ -6,9 +6,14 @@ import {
 } from '../helpers.js';
 
 // The page's meta description: the resource description's first sentence
-// when there is one, the provider-wide line otherwise.
-function resourcePageDescription(resourceDescription, providerName) {
-  return yamlString(metaDescription(resourceDescription, `Query, deploy and manage ${providerName} resources using SQL`));
+// when there is one, otherwise a line naming the resource, its service and
+// the provider, so no two resource pages share a description.
+export function resourceFallbackDescription(resourceName, providerName, serviceName) {
+  return `Query, deploy and manage the ${resourceName} resource in the ${providerName} ${serviceName} service using SQL`;
+}
+
+function resourcePageDescription(resourceDescription, resourceName, providerName, serviceName) {
+  return yamlString(metaDescription(resourceDescription, resourceFallbackDescription(resourceName, providerName, serviceName)));
 }
 
 export function createOverviewSection(resourceName, resourceType, resourceDescription, providerName, serviceName) {
@@ -24,7 +29,7 @@ keywords:
   - infrastructure-as-code
   - configuration-as-data
   - cloud inventory
-description: ${resourcePageDescription(resourceDescription, providerName)}
+description: ${resourcePageDescription(resourceDescription, resourceName, providerName, serviceName)}
 custom_edit_url: null
 image: /img/stackql-${providerName}-provider-featured-image.png
 ---
@@ -64,7 +69,7 @@ keywords:
   - infrastructure-as-code
   - configuration-as-data
   - cloud inventory
-description: ${resourcePageDescription(resourceDescription, providerName)}
+description: ${resourcePageDescription(resourceDescription, resourceName, providerName, serviceName)}
 custom_edit_url: null
 image: /img/stackql-${providerName}-provider-featured-image.png
 ---

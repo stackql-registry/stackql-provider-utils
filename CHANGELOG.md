@@ -4,9 +4,9 @@
 
 Regenerated output changes for every provider: the front matter `description:` of every resource and service page.
 
-- docgen: per-page descriptions. Resource pages take the first sentence of the resource description (HTML tags and Markdown links stripped, inline code backticks dropped, entities decoded, whitespace collapsed, capped at 160 characters on a word boundary), falling back to the former `Query, deploy and manage <provider> resources using SQL` when the resource has none. Service index pages read `Query, deploy and manage <provider> <service> resources using SQL`. The provider index page keeps the description from `headerContent1.txt`. Applies to `generateDocs` and `generateDocsv2`
+- docgen: per-page descriptions. Resource pages take the first sentence of the resource description (HTML tags and Markdown links stripped, inline code backticks dropped, entities decoded, whitespace collapsed, capped at 160 characters on a word boundary), falling back to `Query, deploy and manage the <resource> resource in the <provider> <service> service using SQL` when the resource has none, so no resource page carries the former provider-wide line and no two share a description. Service index pages read `Query, deploy and manage <provider> <service> resources using SQL`. The provider index page keeps the description from `headerContent1.txt`. Applies to `generateDocs` and `generateDocsv2`
 - docgen: front matter descriptions are written as YAML double-quoted scalars (`JSON.stringify`), so a description containing a colon, quotes, `#` or a newline still parses
-- new helpers in `src/docgen/helpers.js`: `metaDescription(text, fallback)`, `yamlString(value)`, `META_DESCRIPTION_MAX`. Covered by tests/docgen/descriptions.test.js
+- new helpers: `metaDescription(text, fallback)`, `yamlString(value)` and `META_DESCRIPTION_MAX` in `src/docgen/helpers.js`; `resourceFallbackDescription(resourceName, providerName, serviceName)` in `src/docgen/resource/overview.js`. Covered by tests/docgen/descriptions.test.js
 
 ## 0.7.12
 
